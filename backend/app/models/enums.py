@@ -41,13 +41,14 @@ class GoalStatus(StrEnum):
 
 class ResourceType(StrEnum):
     COURSE = "course"
-    PROJECT = "project"
-    ARTICLE = "article"
     VIDEO = "video"
+    ARTICLE = "article"
     BOOK = "book"
+    PROJECT = "project"
+    ASSESSMENT = "assessment"
+    DOCUMENTATION = "documentation"
     TUTORIAL = "tutorial"
     LAB = "lab"
-    ASSESSMENT = "assessment"
 
 
 class Modality(StrEnum):

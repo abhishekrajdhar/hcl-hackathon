@@ -7,7 +7,7 @@ from app.models.goal import LearningGoal, LearningGoalSkill
 from app.models.path import LearningPath, LearningPathItem
 from app.models.progress import UserProgress
 from app.models.recommendation import Recommendation
-from app.models.resource import Resource, ResourceSkill
+from app.models.resource import Resource, ResourcePrerequisite, ResourceSkill
 from app.models.skill import Prerequisite, Skill, SkillCategory, UserSkill
 from app.models.user import LearnerProfile, User
 
@@ -25,6 +25,7 @@ __all__ = [
     "Prerequisite",
     "Recommendation",
     "Resource",
+    "ResourcePrerequisite",
     "ResourceSkill",
     "Skill",
     "SkillCategory",

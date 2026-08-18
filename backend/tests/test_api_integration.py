@@ -240,7 +240,7 @@ async def test_path_progress_and_ownership(
             "provider": "test",
             "title": "A course",
             "url": "https://example.test/course",
-            "duration_minutes": 60,
+            "estimated_hours": 1.0,
             "skills": [{"skill_id": skill, "teaches_level_from": 0, "teaches_level_to": 3}],
         },
     )

@@ -9,6 +9,8 @@ from app.models.enums import ResourceType
 from app.schemas.common import Page
 from app.schemas.resource import (
     ResourceCreate,
+    ResourcePrerequisiteCreate,
+    ResourcePrerequisiteRead,
     ResourceRead,
     ResourceSkillCreate,
     ResourceSkillRead,
@@ -26,23 +28,33 @@ async def list_resources(
     pagination: PaginationDep,
     _: CurrentUser,
     search: str | None = Query(default=None, min_length=1, max_length=256),
-    type: ResourceType | None = None,
+    skill_id: uuid.UUID | None = Query(default=None, description="Filter by taught skill"),
+    resource_type: ResourceType | None = Query(default=None),
+    difficulty: int | None = Query(default=None, ge=1, le=5),
+    min_difficulty: int | None = Query(default=None, ge=1, le=5),
+    max_difficulty: int | None = Query(default=None, ge=1, le=5),
+    min_hours: float | None = Query(default=None, ge=0, description="Min estimated hours"),
+    max_hours: float | None = Query(default=None, ge=0, description="Max estimated hours"),
+    min_quality: float | None = Query(default=None, ge=0, le=1),
     provider: str | None = None,
     language: str | None = None,
-    max_difficulty: int | None = Query(default=None, ge=1, le=5),
-    skill_id: uuid.UUID | None = None,
     is_active: bool | None = True,
 ) -> Page[ResourceRead]:
     items, total = await ResourceService(session).list(
         limit=pagination.limit,
         offset=pagination.offset,
         search=search,
-        resource_type=type,
+        skill_id=skill_id,
+        resource_type=resource_type,
+        difficulty=difficulty,
+        min_difficulty=min_difficulty,
+        max_difficulty=max_difficulty,
+        min_hours=min_hours,
+        max_hours=max_hours,
+        min_quality=min_quality,
         provider=provider,
         language=language,
-        max_difficulty=max_difficulty,
         is_active=is_active,
-        skill_id=skill_id,
     )
     return Page[ResourceRead](
         items=[ResourceRead.model_validate(r) for r in items],
@@ -66,8 +78,22 @@ async def get_resource(
     return ResourceRead.model_validate(await ResourceService(session).get(resource_id))
 
 
-@router.patch("/{resource_id}", response_model=ResourceRead)
+@router.put(
+    "/{resource_id}",
+    response_model=ResourceRead,
+    summary="Update a resource (replaces skills/prerequisites when supplied)",
+)
 async def update_resource(
+    resource_id: uuid.UUID, payload: ResourceUpdate, session: SessionDep, _: AdminUser
+) -> ResourceRead:
+    return ResourceRead.model_validate(
+        await ResourceService(session).update(resource_id, payload)
+    )
+
+
+# PATCH kept as an alias of PUT for partial scalar updates.
+@router.patch("/{resource_id}", response_model=ResourceRead, include_in_schema=False)
+async def patch_resource(
     resource_id: uuid.UUID, payload: ResourceUpdate, session: SessionDep, _: AdminUser
 ) -> ResourceRead:
     return ResourceRead.model_validate(
@@ -99,7 +125,7 @@ async def add_resource_skill(
     return ResourceSkillRead.model_validate(link)
 
 
-@router.patch("/{resource_id}/skills/{skill_id}", response_model=ResourceSkillRead)
+@router.put("/{resource_id}/skills/{skill_id}", response_model=ResourceSkillRead)
 async def update_resource_skill(
     resource_id: uuid.UUID,
     skill_id: uuid.UUID,
@@ -111,8 +137,45 @@ async def update_resource_skill(
     return ResourceSkillRead.model_validate(link)
 
 
-@router.delete("/{resource_id}/skills/{skill_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
+@router.delete(
+    "/{resource_id}/skills/{skill_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None
+)
 async def remove_resource_skill(
     resource_id: uuid.UUID, skill_id: uuid.UUID, session: SessionDep, _: AdminUser
 ) -> None:
     await ResourceService(session).remove_skill(resource_id, skill_id)
+
+
+# --- prerequisites ---------------------------------------------------------
+@router.get("/{resource_id}/prerequisites", response_model=list[ResourcePrerequisiteRead])
+async def list_resource_prerequisites(
+    resource_id: uuid.UUID, session: SessionDep, _: CurrentUser
+) -> list[ResourcePrerequisiteRead]:
+    links = await ResourceService(session).list_prerequisites(resource_id)
+    return [ResourcePrerequisiteRead.model_validate(link) for link in links]
+
+
+@router.post(
+    "/{resource_id}/prerequisites",
+    response_model=ResourcePrerequisiteRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_resource_prerequisite(
+    resource_id: uuid.UUID,
+    payload: ResourcePrerequisiteCreate,
+    session: SessionDep,
+    _: AdminUser,
+) -> ResourcePrerequisiteRead:
+    link = await ResourceService(session).add_prerequisite(resource_id, payload)
+    return ResourcePrerequisiteRead.model_validate(link)
+
+
+@router.delete(
+    "/{resource_id}/prerequisites/{skill_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
+)
+async def remove_resource_prerequisite(
+    resource_id: uuid.UUID, skill_id: uuid.UUID, session: SessionDep, _: AdminUser
+) -> None:
+    await ResourceService(session).remove_prerequisite(resource_id, skill_id)

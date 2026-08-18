@@ -11,7 +11,11 @@ from app.repositories.goal import LearningGoalRepository, LearningGoalSkillRepos
 from app.repositories.path import LearningPathItemRepository, LearningPathRepository
 from app.repositories.progress import UserProgressRepository
 from app.repositories.recommendation import RecommendationRepository
-from app.repositories.resource import ResourceRepository, ResourceSkillRepository
+from app.repositories.resource import (
+    ResourcePrerequisiteRepository,
+    ResourceRepository,
+    ResourceSkillRepository,
+)
 from app.repositories.skill import (
     PrerequisiteRepository,
     SkillCategoryRepository,
@@ -33,6 +37,7 @@ __all__ = [
     "LearningPathRepository",
     "PrerequisiteRepository",
     "RecommendationRepository",
+    "ResourcePrerequisiteRepository",
     "ResourceRepository",
     "ResourceSkillRepository",
     "SkillCategoryRepository",

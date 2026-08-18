@@ -7,7 +7,7 @@ from sqlalchemy.orm import selectinload
 
 from app.models.enums import RecommendationStatus
 from app.models.recommendation import Recommendation
-from app.models.resource import Resource, ResourceSkill
+from app.models.resource import Resource, ResourcePrerequisite, ResourceSkill
 from app.models.skill import Skill
 from app.repositories.base import BaseRepository
 
@@ -20,7 +20,11 @@ class RecommendationRepository(BaseRepository[Recommendation]):
             selectinload(Recommendation.resource)
             .selectinload(Resource.skills)
             .selectinload(ResourceSkill.skill)
-            .selectinload(Skill.category)
+            .selectinload(Skill.category),
+            selectinload(Recommendation.resource)
+            .selectinload(Resource.prerequisites)
+            .selectinload(ResourcePrerequisite.skill)
+            .selectinload(Skill.category),
         )
 
     async def list_pending_for_user(

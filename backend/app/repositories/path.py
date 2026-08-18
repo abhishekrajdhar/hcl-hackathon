@@ -7,7 +7,7 @@ from sqlalchemy.orm import selectinload
 
 from app.models.enums import PathStatus
 from app.models.path import LearningPath, LearningPathItem
-from app.models.resource import Resource, ResourceSkill
+from app.models.resource import Resource, ResourcePrerequisite, ResourceSkill
 from app.models.skill import Skill
 from app.repositories.base import BaseRepository
 
@@ -24,7 +24,12 @@ class LearningPathRepository(BaseRepository[LearningPath]):
             .selectinload(LearningPathItem.resource)
             .selectinload(Resource.skills)
             .selectinload(ResourceSkill.skill)
-            .selectinload(Skill.category)
+            .selectinload(Skill.category),
+            selectinload(LearningPath.items)
+            .selectinload(LearningPathItem.resource)
+            .selectinload(Resource.prerequisites)
+            .selectinload(ResourcePrerequisite.skill)
+            .selectinload(Skill.category),
         )
 
     async def get_with_items(self, path_id: uuid.UUID) -> LearningPath | None:
@@ -58,7 +63,11 @@ class LearningPathItemRepository(BaseRepository[LearningPathItem]):
             selectinload(LearningPathItem.resource)
             .selectinload(Resource.skills)
             .selectinload(ResourceSkill.skill)
-            .selectinload(Skill.category)
+            .selectinload(Skill.category),
+            selectinload(LearningPathItem.resource)
+            .selectinload(Resource.prerequisites)
+            .selectinload(ResourcePrerequisite.skill)
+            .selectinload(Skill.category),
         )
 
     async def list_for_path(self, path_id: uuid.UUID) -> list[LearningPathItem]:

@@ -15,9 +15,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.logging import configure_logging, get_logger
 from app.core.security import hash_password
+from app.db.seeds.resources import RESOURCES
 from app.db.seeds.skill_graph import CATEGORIES, EDGES, SKILLS
 from app.db.session import SessionLocal, dispose_engine
 from app.models.enums import RelationshipType, UserRole
+from app.models.resource import Resource, ResourcePrerequisite, ResourceSkill
+from app.repositories.resource import ResourceRepository
 from app.repositories.skill import (
     PrerequisiteRepository,
     SkillCategoryRepository,
@@ -169,11 +172,86 @@ def _edge_payload(source_id: object, prereq_id: object, edge: object):  # type: 
     )
 
 
+async def seed_resources() -> None:
+    """Upsert the learning-resource catalogue with its skills and prerequisites.
+
+    Idempotent: resources are matched by (provider, external_id); rows that
+    already exist are left untouched. Skill slugs are resolved to ids, so an
+    unknown slug is logged and skipped rather than corrupting a link.
+    """
+    async with SessionLocal() as session:
+        resources = ResourceRepository(session)
+        skills = SkillRepository(session)
+
+        # Resolve every referenced slug once.
+        referenced: set[str] = set()
+        for seed in RESOURCES:
+            referenced.update(t.skill for t in seed.teaches)
+            referenced.update(slug for slug, _ in seed.prerequisites)
+        slug_to_id = {s.slug: s.id for s in await skills.get_many_by_slug(sorted(referenced))}
+
+        created = 0
+        for seed in RESOURCES:
+            if await resources.get_by(provider=seed.provider, external_id=seed.external_id) is not None:
+                continue
+
+            resource = Resource(
+                external_id=seed.external_id,
+                provider=seed.provider,
+                title=seed.title,
+                description=seed.description,
+                url=seed.url,
+                resource_type=seed.resource_type,
+                modality=seed.modality,
+                difficulty=seed.difficulty,
+                estimated_hours=seed.estimated_hours,
+                quality_score=seed.quality_score,
+                rating=seed.rating,
+                rating_count=seed.rating_count,
+                extra=dict(seed.metadata),
+            )
+            session.add(resource)
+            await session.flush()  # assign resource.id
+
+            for teach in seed.teaches:
+                skill_id = slug_to_id.get(teach.skill)
+                if skill_id is None:
+                    logger.warning("resource teaches unknown skill", extra={"resource": seed.external_id, "skill": teach.skill})
+                    continue
+                session.add(
+                    ResourceSkill(
+                        resource_id=resource.id,
+                        skill_id=skill_id,
+                        teaches_level_from=teach.level_from,
+                        teaches_level_to=teach.level_to,
+                        is_primary=teach.is_primary,
+                    )
+                )
+            for slug, min_prof in seed.prerequisites:
+                skill_id = slug_to_id.get(slug)
+                if skill_id is None:
+                    logger.warning("resource requires unknown skill", extra={"resource": seed.external_id, "skill": slug})
+                    continue
+                session.add(
+                    ResourcePrerequisite(
+                        resource_id=resource.id, skill_id=skill_id, min_proficiency=min_prof
+                    )
+                )
+            created += 1
+
+        await session.commit()
+        logger.info(
+            "seeded resources",
+            extra={"resources_created": created, "resources_total": len(RESOURCES)},
+        )
+
+
 async def main() -> None:
     configure_logging()
     try:
         await seed_admin()
         await seed_skill_graph()
+        await seed_resources()
     finally:
         await dispose_engine()
 
