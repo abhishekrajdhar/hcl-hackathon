@@ -59,9 +59,34 @@ class Modality(StrEnum):
     MIXED = "mixed"
 
 
-class PrerequisiteStrength(StrEnum):
-    HARD = "hard"
-    SOFT = "soft"
+class RelationshipType(StrEnum):
+    """How a prerequisite edge constrains ordering.
+
+    Only HARD_PREREQUISITE can make a learning order *invalid*. HARD, SOFT and
+    RECOMMENDED all constrain sequencing and all participate in cycle
+    detection; RELATED is an association only and is excluded from the DAG.
+    """
+
+    HARD_PREREQUISITE = "hard_prerequisite"
+    SOFT_PREREQUISITE = "soft_prerequisite"
+    RECOMMENDED = "recommended"
+    RELATED = "related"
+
+
+#: Edge types that impose an ordering constraint on a learning sequence.
+ORDERING_RELATIONSHIPS: frozenset[RelationshipType] = frozenset(
+    {
+        RelationshipType.HARD_PREREQUISITE,
+        RelationshipType.SOFT_PREREQUISITE,
+        RelationshipType.RECOMMENDED,
+    }
+)
+
+#: Edge types whose violation makes a learning order invalid rather than merely
+#: suboptimal.
+BLOCKING_RELATIONSHIPS: frozenset[RelationshipType] = frozenset(
+    {RelationshipType.HARD_PREREQUISITE}
+)
 
 
 class PathStatus(StrEnum):

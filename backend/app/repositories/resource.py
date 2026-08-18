@@ -8,6 +8,7 @@ from sqlalchemy import Select, or_, select
 from sqlalchemy.orm import joinedload, selectinload
 
 from app.models.resource import Resource, ResourceSkill
+from app.models.skill import Skill
 from app.repositories.base import BaseRepository
 
 
@@ -16,7 +17,9 @@ class ResourceRepository(BaseRepository[Resource]):
 
     def _base_select(self) -> Select[tuple[Resource]]:
         return select(Resource).options(
-            selectinload(Resource.skills).joinedload(ResourceSkill.skill)
+            selectinload(Resource.skills)
+            .joinedload(ResourceSkill.skill)
+            .joinedload(Skill.category)
         )
 
     @staticmethod
@@ -47,13 +50,18 @@ class ResourceRepository(BaseRepository[Resource]):
 class ResourceSkillRepository(BaseRepository[ResourceSkill]):
     model = ResourceSkill
 
+    def _base_select(self) -> Select[tuple[ResourceSkill]]:
+        return select(ResourceSkill).options(
+            joinedload(ResourceSkill.skill).joinedload(Skill.category)
+        )
+
     async def get_link(self, resource_id: uuid.UUID, skill_id: uuid.UUID) -> ResourceSkill | None:
         return await self.get_by(resource_id=resource_id, skill_id=skill_id)
 
     async def list_for_resource(self, resource_id: uuid.UUID) -> list[ResourceSkill]:
         stmt = (
             select(ResourceSkill)
-            .options(joinedload(ResourceSkill.skill))
+            .options(joinedload(ResourceSkill.skill).joinedload(Skill.category))
             .where(ResourceSkill.resource_id == resource_id)
         )
         return list((await self.session.execute(stmt)).scalars().unique().all())

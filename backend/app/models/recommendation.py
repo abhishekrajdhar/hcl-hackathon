@@ -20,7 +20,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import Base, TimestampMixin, UUIDMixin
+from app.models.base import Base, TimestampMixin, UUIDMixin, utcnow
 from app.models.enums import RecommendationStatus
 from app.models.types import pg_enum
 
@@ -68,7 +68,7 @@ class Recommendation(UUIDMixin, TimestampMixin, Base):
     reason: Mapped[str | None] = mapped_column(Text)
     rationale_trace: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     generated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
+        DateTime(timezone=True), nullable=False, default=utcnow, server_default=func.now()
     )
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     responded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

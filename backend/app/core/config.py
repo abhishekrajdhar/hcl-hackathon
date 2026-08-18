@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import functools
-from typing import Any, Literal
+import json
+from typing import Annotated, Any, Literal
 
 from pydantic import Field, PostgresDsn, field_validator, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -33,7 +34,10 @@ class Settings(BaseSettings):
     )
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
-    CORS_ORIGINS: list[str] = ["http://localhost:3000"]
+    # NoDecode: take the raw string so the validator below can accept both a
+    # comma-separated list and a JSON array. Without it pydantic-settings tries
+    # json.loads() first and fails on "a,b".
+    CORS_ORIGINS: Annotated[list[str], NoDecode] = ["http://localhost:3000"]
 
     # --- Database --------------------------------------------------------
     POSTGRES_HOST: str = "localhost"
@@ -72,10 +76,13 @@ class Settings(BaseSettings):
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def _split_origins(cls, value: Any) -> Any:
-        """Accept both a JSON list and a comma-separated string."""
-        if isinstance(value, str) and not value.strip().startswith("["):
-            return [item.strip() for item in value.split(",") if item.strip()]
-        return value
+        """Accept both a JSON array and a comma-separated string."""
+        if not isinstance(value, str):
+            return value
+        text = value.strip()
+        if text.startswith("["):
+            return json.loads(text)
+        return [item.strip() for item in text.split(",") if item.strip()]
 
     @field_validator("LOG_LEVEL", mode="before")
     @classmethod

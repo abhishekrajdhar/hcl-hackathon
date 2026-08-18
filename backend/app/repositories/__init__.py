@@ -14,6 +14,7 @@ from app.repositories.recommendation import RecommendationRepository
 from app.repositories.resource import ResourceRepository, ResourceSkillRepository
 from app.repositories.skill import (
     PrerequisiteRepository,
+    SkillCategoryRepository,
     SkillRepository,
     UserSkillRepository,
 )
@@ -34,6 +35,7 @@ __all__ = [
     "RecommendationRepository",
     "ResourceRepository",
     "ResourceSkillRepository",
+    "SkillCategoryRepository",
     "SkillRepository",
     "UserProgressRepository",
     "UserRepository",

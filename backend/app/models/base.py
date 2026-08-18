@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import DateTime, MetaData, func, text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
@@ -35,15 +35,30 @@ class UUIDMixin:
     )
 
 
+def utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
 class TimestampMixin:
+    """Created/updated timestamps.
+
+    The defaults are client-side *and* server-side on purpose. A SQL-expression
+    `onupdate` would leave the attribute expired after flush, and refreshing it
+    lazily during response serialisation raises MissingGreenlet under asyncio.
+    Computing it in Python keeps the value loaded; `server_default` still covers
+    rows inserted outside the ORM.
+    """
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
+        default=utcnow,
         server_default=func.now(),
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
+        default=utcnow,
+        onupdate=utcnow,
         server_default=func.now(),
-        onupdate=func.now(),
     )

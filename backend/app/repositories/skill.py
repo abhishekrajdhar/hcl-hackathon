@@ -2,28 +2,60 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
+from typing import Any
 
-from sqlalchemy import Select, or_, select, text
+from sqlalchemy import Select, func, literal, or_, select
 from sqlalchemy.orm import joinedload
 
-from app.models.skill import Prerequisite, Skill, UserSkill
+from app.models.enums import ORDERING_RELATIONSHIPS
+from app.models.skill import Prerequisite, Skill, SkillCategory, UserSkill
 from app.repositories.base import BaseRepository
+
+#: Hard bound on recursive traversal in SQL, mirroring the engine's bound.
+MAX_TRAVERSAL_DEPTH = 32
+
+_ORDERING_VALUES = [t.value for t in ORDERING_RELATIONSHIPS]
+
+
+class SkillCategoryRepository(BaseRepository[SkillCategory]):
+    model = SkillCategory
+
+    async def get_by_slug(self, slug: str) -> SkillCategory | None:
+        return await self.get_by(slug=slug)
+
+    async def list_ordered(self) -> list[SkillCategory]:
+        stmt = select(SkillCategory).order_by(SkillCategory.display_order, SkillCategory.name)
+        return list((await self.session.execute(stmt)).scalars().all())
 
 
 class SkillRepository(BaseRepository[Skill]):
     model = Skill
 
+    def _base_select(self) -> Select[tuple[Skill]]:
+        # The category is part of every skill representation, so always join it.
+        return select(Skill).options(joinedload(Skill.category))
+
     async def get_by_slug(self, slug: str) -> Skill | None:
         return await self.get_by(slug=slug)
+
+    async def get_by(self, **filters: Any) -> Skill | None:
+        stmt = self._base_select().filter_by(**filters).limit(1)
+        return (await self.session.execute(stmt)).scalars().unique().one_or_none()
 
     async def get_many(self, skill_ids: Sequence[uuid.UUID]) -> list[Skill]:
         if not skill_ids:
             return []
-        stmt = select(Skill).where(Skill.id.in_(list(skill_ids)))
-        return list((await self.session.execute(stmt)).scalars().all())
+        stmt = self._base_select().where(Skill.id.in_(list(skill_ids)))
+        return list((await self.session.execute(stmt)).scalars().unique().all())
+
+    async def get_many_by_slug(self, slugs: Sequence[str]) -> list[Skill]:
+        if not slugs:
+            return []
+        stmt = self._base_select().where(Skill.slug.in_(list(slugs)))
+        return list((await self.session.execute(stmt)).scalars().unique().all())
 
     @staticmethod
-    def search_filter(term: str):  # type: ignore[no-untyped-def]
+    def search_filter(term: str) -> Any:
         pattern = f"%{term.lower()}%"
         return or_(
             Skill.name.ilike(pattern),
@@ -36,7 +68,9 @@ class UserSkillRepository(BaseRepository[UserSkill]):
     model = UserSkill
 
     def _base_select(self) -> Select[tuple[UserSkill]]:
-        return select(UserSkill).options(joinedload(UserSkill.skill))
+        return select(UserSkill).options(
+            joinedload(UserSkill.skill).joinedload(Skill.category)
+        )
 
     async def get_for_user(self, user_id: uuid.UUID, skill_id: uuid.UUID) -> UserSkill | None:
         stmt = self._base_select().where(
@@ -46,49 +80,106 @@ class UserSkillRepository(BaseRepository[UserSkill]):
 
 
 class PrerequisiteRepository(BaseRepository[Prerequisite]):
+    """Edges of the skill DAG.
+
+    Traversal is done in SQL with recursive CTEs so only the relevant subgraph
+    is pulled into memory; the algorithms themselves live in
+    `app.engines.skill_graph` and stay pure.
+    """
+
     model = Prerequisite
 
-    async def get_edge(
-        self, skill_id: uuid.UUID, prerequisite_skill_id: uuid.UUID
-    ) -> Prerequisite | None:
-        return await self.get_by(skill_id=skill_id, prerequisite_skill_id=prerequisite_skill_id)
-
-    async def list_for_skill(self, skill_id: uuid.UUID) -> list[Prerequisite]:
-        stmt = select(Prerequisite).where(Prerequisite.skill_id == skill_id)
-        return list((await self.session.execute(stmt)).scalars().all())
-
-    async def closure(self, skill_id: uuid.UUID, max_depth: int = 16) -> list[tuple[uuid.UUID, int]]:
-        """Transitive prerequisite closure via a recursive CTE.
-
-        Returns (skill_id, depth) pairs excluding the root. Depth is bounded so a
-        malformed graph can never produce an unbounded scan.
-        """
-        stmt = text(
-            """
-            WITH RECURSIVE closure(skill_id, depth) AS (
-                SELECT p.prerequisite_skill_id, 1
-                FROM prerequisites p
-                WHERE p.skill_id = :root
-              UNION
-                SELECT p.prerequisite_skill_id, c.depth + 1
-                FROM prerequisites p
-                JOIN closure c ON p.skill_id = c.skill_id
-                WHERE c.depth < :max_depth
-            )
-            SELECT skill_id, MIN(depth) AS depth
-            FROM closure
-            GROUP BY skill_id
-            ORDER BY depth
-            """
+    def _base_select(self) -> Select[tuple[Prerequisite]]:
+        return select(Prerequisite).options(
+            joinedload(Prerequisite.prerequisite_skill).joinedload(Skill.category),
+            joinedload(Prerequisite.source_skill).joinedload(Skill.category),
         )
-        rows = await self.session.execute(stmt, {"root": skill_id, "max_depth": max_depth})
-        return [(row.skill_id, row.depth) for row in rows]
+
+    async def get_edge(
+        self, source_skill_id: uuid.UUID, prerequisite_skill_id: uuid.UUID
+    ) -> Prerequisite | None:
+        stmt = self._base_select().where(
+            Prerequisite.source_skill_id == source_skill_id,
+            Prerequisite.prerequisite_skill_id == prerequisite_skill_id,
+        )
+        return (await self.session.execute(stmt)).scalars().unique().one_or_none()
+
+    async def list_prerequisites(self, source_skill_id: uuid.UUID) -> list[Prerequisite]:
+        """Direct prerequisites: what this skill requires."""
+        stmt = self._base_select().where(Prerequisite.source_skill_id == source_skill_id)
+        return list((await self.session.execute(stmt)).scalars().unique().all())
+
+    async def list_dependents(self, prerequisite_skill_id: uuid.UUID) -> list[Prerequisite]:
+        """Direct dependents: what requires this skill."""
+        stmt = self._base_select().where(
+            Prerequisite.prerequisite_skill_id == prerequisite_skill_id
+        )
+        return list((await self.session.execute(stmt)).scalars().unique().all())
+
+    def _closure_cte(
+        self, roots: Sequence[uuid.UUID], *, upward: bool, max_depth: int
+    ) -> Any:
+        """Recursive CTE walking the DAG in one direction.
+
+        `upward` follows prerequisites (what must come first); otherwise it
+        follows dependents. `related` edges are excluded — they are an
+        association, not a dependency.
+        """
+        table = Prerequisite.__table__
+        step_from = table.c.source_skill_id if upward else table.c.prerequisite_skill_id
+        step_to = table.c.prerequisite_skill_id if upward else table.c.source_skill_id
+        ordering = table.c.relationship_type.in_(_ORDERING_VALUES)
+
+        base = (
+            select(step_to.label("skill_id"), literal(1).label("depth"))
+            .where(step_from.in_(list(roots)), ordering)
+        )
+        cte = base.cte("closure", recursive=True)
+
+        step_from_r = table.c.source_skill_id if upward else table.c.prerequisite_skill_id
+        step_to_r = table.c.prerequisite_skill_id if upward else table.c.source_skill_id
+        recursive = (
+            select(step_to_r, cte.c.depth + 1)
+            .join(cte, step_from_r == cte.c.skill_id)
+            .where(cte.c.depth < max_depth, ordering)
+        )
+        return cte.union(recursive)
+
+    async def _closure(
+        self, roots: Sequence[uuid.UUID], *, upward: bool, max_depth: int
+    ) -> dict[uuid.UUID, int]:
+        if not roots:
+            return {}
+        cte = self._closure_cte(roots, upward=upward, max_depth=max_depth)
+        stmt = select(cte.c.skill_id, func.min(cte.c.depth)).group_by(cte.c.skill_id)
+        rows = await self.session.execute(stmt)
+        root_set = set(roots)
+        return {row[0]: int(row[1]) for row in rows if row[0] not in root_set}
+
+    async def ancestor_ids(
+        self, roots: Sequence[uuid.UUID], max_depth: int = MAX_TRAVERSAL_DEPTH
+    ) -> dict[uuid.UUID, int]:
+        """Transitive prerequisites of the roots, mapped to shallowest depth."""
+        return await self._closure(roots, upward=True, max_depth=max_depth)
+
+    async def descendant_ids(
+        self, roots: Sequence[uuid.UUID], max_depth: int = MAX_TRAVERSAL_DEPTH
+    ) -> dict[uuid.UUID, int]:
+        """Skills transitively unlocked by the roots."""
+        return await self._closure(roots, upward=False, max_depth=max_depth)
 
     async def edges_within(self, skill_ids: Sequence[uuid.UUID]) -> list[Prerequisite]:
+        """Every edge whose endpoints both lie inside the given set."""
         if not skill_ids:
             return []
         ids = list(skill_ids)
-        stmt = select(Prerequisite).where(
-            Prerequisite.skill_id.in_(ids), Prerequisite.prerequisite_skill_id.in_(ids)
+        stmt = self._base_select().where(
+            Prerequisite.source_skill_id.in_(ids),
+            Prerequisite.prerequisite_skill_id.in_(ids),
         )
+        return list((await self.session.execute(stmt)).scalars().unique().all())
+
+    async def all_edges(self) -> list[Prerequisite]:
+        """Whole graph. Used by the integrity check, not by request paths."""
+        stmt = select(Prerequisite)
         return list((await self.session.execute(stmt)).scalars().all())

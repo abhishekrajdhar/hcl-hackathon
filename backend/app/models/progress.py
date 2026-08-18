@@ -6,12 +6,20 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Integer, Float, func
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    func,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import Base, TimestampMixin, UUIDMixin
+from app.models.base import Base, TimestampMixin, UUIDMixin, utcnow
 from app.models.enums import ProgressEventType
 from app.models.types import pg_enum
 
@@ -44,7 +52,7 @@ class UserProgress(UUIDMixin, TimestampMixin, Base):
     progress_pct: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     time_spent_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     occurred_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
+        DateTime(timezone=True), nullable=False, default=utcnow, server_default=func.now()
     )
     details: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
 

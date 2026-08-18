@@ -7,6 +7,8 @@ from sqlalchemy.orm import selectinload
 
 from app.models.enums import PathStatus
 from app.models.path import LearningPath, LearningPathItem
+from app.models.resource import Resource, ResourceSkill
+from app.models.skill import Skill
 from app.repositories.base import BaseRepository
 
 
@@ -14,8 +16,15 @@ class LearningPathRepository(BaseRepository[LearningPath]):
     model = LearningPath
 
     def with_items(self) -> Select[tuple[LearningPath]]:
+        # The nested resource is serialised with its skill links, so the whole
+        # chain must be eager: a lazy load during response serialisation would
+        # raise MissingGreenlet on the async session.
         return select(LearningPath).options(
-            selectinload(LearningPath.items).selectinload(LearningPathItem.resource)
+            selectinload(LearningPath.items)
+            .selectinload(LearningPathItem.resource)
+            .selectinload(Resource.skills)
+            .selectinload(ResourceSkill.skill)
+            .selectinload(Skill.category)
         )
 
     async def get_with_items(self, path_id: uuid.UUID) -> LearningPath | None:
@@ -44,13 +53,21 @@ class LearningPathRepository(BaseRepository[LearningPath]):
 class LearningPathItemRepository(BaseRepository[LearningPathItem]):
     model = LearningPathItem
 
+    def _base_select(self) -> Select[tuple[LearningPathItem]]:
+        return select(LearningPathItem).options(
+            selectinload(LearningPathItem.resource)
+            .selectinload(Resource.skills)
+            .selectinload(ResourceSkill.skill)
+            .selectinload(Skill.category)
+        )
+
     async def list_for_path(self, path_id: uuid.UUID) -> list[LearningPathItem]:
         stmt = (
-            select(LearningPathItem)
+            self._base_select()
             .where(LearningPathItem.path_id == path_id)
             .order_by(LearningPathItem.order_index)
         )
-        return list((await self.session.execute(stmt)).scalars().all())
+        return list((await self.session.execute(stmt)).scalars().unique().all())
 
     async def max_order_index(self, path_id: uuid.UUID) -> int:
         stmt = select(func.coalesce(func.max(LearningPathItem.order_index), -1)).where(
