@@ -39,6 +39,43 @@ class ResourceRepository(BaseRepository[Resource]):
             select(ResourceSkill.resource_id).where(ResourceSkill.skill_id == skill_id)
         )
 
+    async def semantic_search(
+        self,
+        embedding: list[float],
+        *,
+        top_k: int,
+        filters: Sequence[Any] = (),
+    ) -> list[tuple[Resource, float]]:
+        """Cosine nearest-neighbour search over stored embeddings.
+
+        Uses pgvector's `<=>` (cosine distance) operator; only rows that have an
+        embedding are considered. Returns (resource, distance) ordered nearest
+        first. Similarity is 1 - distance for these L2-normalised vectors.
+        """
+        distance = Resource.embedding.cosine_distance(embedding).label("distance")
+        stmt = (
+            self._base_select()
+            .add_columns(distance)
+            .where(Resource.embedding.isnot(None), *filters)
+            .order_by(distance)
+            .limit(top_k)
+        )
+        rows = (await self.session.execute(stmt)).unique().all()
+        return [(row[0], float(row[1])) for row in rows]
+
+    async def list_missing_embeddings(self, *, limit: int, offset: int = 0) -> list[Resource]:
+        stmt = (
+            self._base_select()
+            .where(Resource.embedding.is_(None))
+            .order_by(Resource.created_at)
+            .limit(limit)
+            .offset(offset)
+        )
+        return list((await self.session.execute(stmt)).scalars().unique().all())
+
+    async def count_missing_embeddings(self) -> int:
+        return await self.count([Resource.embedding.is_(None)])
+
     async def get_many(self, resource_ids: Sequence[uuid.UUID]) -> list[Resource]:
         if not resource_ids:
             return []

@@ -246,12 +246,31 @@ async def seed_resources() -> None:
         )
 
 
+async def seed_embeddings() -> None:
+    """Generate embeddings for any resources that lack one.
+
+    Uses the configured embedding provider (mock by default, so this runs with
+    no heavy dependency). Idempotent: only-missing, so re-runs are cheap.
+    """
+    from app.embeddings.factory import get_embedding_provider
+    from app.services.embedding_service import EmbeddingService
+
+    provider = get_embedding_provider()
+    async with SessionLocal() as session:
+        result = await EmbeddingService(session, provider).embed_all(only_missing=True)
+    logger.info(
+        "seeded embeddings",
+        extra={"embedded": result.embedded, "provider": provider.name, "dimension": result.dimension},
+    )
+
+
 async def main() -> None:
     configure_logging()
     try:
         await seed_admin()
         await seed_skill_graph()
         await seed_resources()
+        await seed_embeddings()
     finally:
         await dispose_engine()
 

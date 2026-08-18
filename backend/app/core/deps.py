@@ -13,6 +13,8 @@ from app.core.config import settings
 from app.core.errors import ForbiddenError, UnauthorizedError
 from app.core.security import decode_access_token
 from app.db.session import get_session
+from app.embeddings.base import EmbeddingProvider
+from app.embeddings.cache import EmbeddingCache
 from app.llm.base import LLMProvider
 from app.models.enums import UserRole
 from app.models.user import User
@@ -90,3 +92,24 @@ def get_llm_provider_dep() -> LLMProvider:
 
 
 LLMProviderDep = Annotated[LLMProvider, Depends(get_llm_provider_dep)]
+
+
+def get_embedding_provider_dep() -> EmbeddingProvider:
+    """The configured embedding provider (settings-driven, cached).
+
+    A dependency so tests can override it with a mock; the provider is never
+    hard-coded in a router or service.
+    """
+    from app.embeddings.factory import get_embedding_provider
+
+    return get_embedding_provider()
+
+
+def get_embedding_cache_dep() -> EmbeddingCache:
+    from app.embeddings.factory import get_embedding_cache
+
+    return get_embedding_cache()
+
+
+EmbeddingProviderDep = Annotated[EmbeddingProvider, Depends(get_embedding_provider_dep)]
+EmbeddingCacheDep = Annotated[EmbeddingCache, Depends(get_embedding_cache_dep)]

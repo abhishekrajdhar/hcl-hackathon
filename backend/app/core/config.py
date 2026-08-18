@@ -57,9 +57,18 @@ class Settings(BaseSettings):
     REDIS_URL: str | None = None
 
     # --- Embeddings ------------------------------------------------------
-    # Pinned here because it becomes the pgvector column dimension.
+    # Provider is settings-driven, never hard-coded. "mock" needs no heavy
+    # dependency (no torch) and is the default so the backend runs locally and
+    # in CI; set "sentence_transformer" (and install sentence-transformers) for
+    # real semantic embeddings. EMBEDDING_DIM is pinned because it is the
+    # pgvector column width — the mock produces vectors of exactly this size and
+    # all-MiniLM-L6-v2 is 384, so they interoperate.
+    EMBEDDING_PROVIDER: Literal["mock", "sentence_transformer"] = "mock"
     EMBEDDING_DIM: int = 384
     EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
+    EMBEDDING_BATCH_SIZE: int = 64
+    #: Bounded in-process cache of query-text -> embedding (repeated searches).
+    EMBEDDING_QUERY_CACHE_SIZE: int = 512
 
     # --- LLM -------------------------------------------------------------
     # Provider is chosen here, never hard-coded in application code. Credentials

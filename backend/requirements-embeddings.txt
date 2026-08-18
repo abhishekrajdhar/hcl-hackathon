@@ -1,0 +1,5 @@
+# Optional: enables EMBEDDING_PROVIDER=sentence_transformer (real embeddings).
+# Heavy (pulls in torch), so it is intentionally NOT in the default image.
+#   pip install -r requirements-embeddings.txt
+-r requirements.txt
+sentence-transformers==3.3.1

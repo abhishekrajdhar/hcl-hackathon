@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import AsyncGenerator
 
-from sqlalchemy import event
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -26,15 +25,10 @@ def _create_engine() -> AsyncEngine:
         pool_timeout=settings.DB_POOL_TIMEOUT,
         pool_recycle=settings.DB_POOL_RECYCLE,
     )
-
-    # pgvector ships an asyncpg codec; without it `vector` columns round-trip
-    # as opaque strings.
-    @event.listens_for(engine.sync_engine, "connect")
-    def _register_vector(dbapi_connection, _record) -> None:  # type: ignore[no-untyped-def]
-        from pgvector.asyncpg import register_vector
-
-        dbapi_connection.run_async(register_vector)
-
+    # NOTE: do NOT register the raw pgvector asyncpg codec here. The
+    # `pgvector.sqlalchemy.Vector` column type already binds Python lists as the
+    # Postgres `'[...]'` vector literal and parses results back to lists;
+    # registering the asyncpg codec as well double-encodes and errors.
     return engine
 
 

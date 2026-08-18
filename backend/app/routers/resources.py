@@ -4,7 +4,13 @@ import uuid
 
 from fastapi import APIRouter, Query, status
 
-from app.core.deps import AdminUser, CurrentUser, PaginationDep, SessionDep
+from app.core.deps import (
+    AdminUser,
+    CurrentUser,
+    EmbeddingProviderDep,
+    PaginationDep,
+    SessionDep,
+)
 from app.models.enums import ResourceType
 from app.schemas.common import Page
 from app.schemas.resource import (
@@ -17,6 +23,8 @@ from app.schemas.resource import (
     ResourceSkillUpdate,
     ResourceUpdate,
 )
+from app.schemas.search import EmbedAllResponse, EmbedResourceResponse
+from app.services.embedding_service import EmbeddingService
 from app.services.resource_service import ResourceService
 
 router = APIRouter(prefix="/resources", tags=["resources"])
@@ -104,6 +112,50 @@ async def patch_resource(
 @router.delete("/{resource_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def delete_resource(resource_id: uuid.UUID, session: SessionDep, _: AdminUser) -> None:
     await ResourceService(session).delete(resource_id)
+
+
+# --- embeddings ------------------------------------------------------------
+@router.post(
+    "/embed-all",
+    response_model=EmbedAllResponse,
+    summary="Generate embeddings for the whole catalogue (admin)",
+)
+async def embed_all_resources(
+    session: SessionDep,
+    provider: EmbeddingProviderDep,
+    _: AdminUser,
+    only_missing: bool = True,
+) -> EmbedAllResponse:
+    result = await EmbeddingService(session, provider).embed_all(only_missing=only_missing)
+    return EmbedAllResponse(
+        embedded=result.embedded,
+        skipped=result.skipped,
+        total=result.total,
+        dimension=result.dimension,
+        provider=provider.name,
+        only_missing=only_missing,
+    )
+
+
+@router.post(
+    "/{resource_id}/embed",
+    response_model=EmbedResourceResponse,
+    summary="Generate and store the embedding for one resource (admin)",
+)
+async def embed_resource(
+    resource_id: uuid.UUID,
+    session: SessionDep,
+    provider: EmbeddingProviderDep,
+    _: AdminUser,
+) -> EmbedResourceResponse:
+    result = await EmbeddingService(session, provider).embed_resource(resource_id)
+    return EmbedResourceResponse(
+        resource_id=result.resource_id,
+        embedded=result.embedded,
+        dimension=result.dimension,
+        provider=provider.name,
+        canonical_text=result.text,
+    )
 
 
 # --- taught skills ---------------------------------------------------------
