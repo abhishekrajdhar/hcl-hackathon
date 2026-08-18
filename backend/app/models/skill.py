@@ -109,6 +109,7 @@ class UserSkill(UUIDMixin, TimestampMixin, Base):
     __tablename__ = "user_skills"
     __table_args__ = (
         UniqueConstraint("user_id", "skill_id", name="uq_user_skills_user_id_skill_id"),
+        CheckConstraint("proficiency >= 0 AND proficiency <= 1", name="proficiency_range"),
         CheckConstraint("current_level >= 0 AND current_level <= 10", name="current_level_range"),
         CheckConstraint(
             "target_level IS NULL OR (target_level >= 0 AND target_level <= 10)",
@@ -123,6 +124,10 @@ class UserSkill(UUIDMixin, TimestampMixin, Base):
     skill_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("skills.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    # Canonical, learner-facing proficiency in [0, 1] (Python: 0.85, ...).
+    proficiency: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    # 0..level_scale mirror of proficiency, kept in sync for the prerequisite /
+    # gap engines which reason on the skill's own level scale.
     current_level: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     target_level: Mapped[float | None] = mapped_column(Float)
     confidence: Mapped[float] = mapped_column(Float, nullable=False, default=0.5)

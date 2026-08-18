@@ -5,7 +5,8 @@ import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import ConflictError, NotFoundError
-from app.models.skill import UserSkill
+from app.engines.profile import level_to_proficiency
+from app.models.skill import Skill, UserSkill
 from app.repositories.skill import SkillRepository, UserSkillRepository
 from app.schemas.skill import UserSkillCreate, UserSkillUpdate
 from app.services.base import BaseService
@@ -36,26 +37,30 @@ class UserSkillService(BaseService):
         return entry
 
     async def add(self, user_id: uuid.UUID, payload: UserSkillCreate) -> UserSkill:
-        if await self.skills.get(payload.skill_id) is None:
+        skill = await self.skills.get(payload.skill_id)
+        if skill is None:
             raise NotFoundError("Skill", payload.skill_id)
         if await self.user_skills.get_for_user(user_id, payload.skill_id) is not None:
             raise ConflictError(
                 "This skill is already on the learner's profile", error_code="user_skill_exists"
             )
-        await self.user_skills.create({**payload.model_dump(), "user_id": user_id})
+        data = self._sync_proficiency(payload.model_dump(), skill)
+        await self.user_skills.create({**data, "user_id": user_id})
         await self.commit()
         # Re-read so the nested skill relationship is loaded for serialisation.
         return await self.get(user_id, payload.skill_id)
 
     async def upsert(self, user_id: uuid.UUID, payload: UserSkillCreate) -> UserSkill:
-        if await self.skills.get(payload.skill_id) is None:
+        skill = await self.skills.get(payload.skill_id)
+        if skill is None:
             raise NotFoundError("Skill", payload.skill_id)
         existing = await self.user_skills.get_for_user(user_id, payload.skill_id)
         if existing is None:
             return await self.add(user_id, payload)
-        await self.user_skills.update(
-            existing, payload.model_dump(exclude={"skill_id"}, exclude_unset=True)
+        data = self._sync_proficiency(
+            payload.model_dump(exclude={"skill_id"}, exclude_unset=True), skill
         )
+        await self.user_skills.update(existing, data)
         await self.commit()
         return existing
 
@@ -63,9 +68,21 @@ class UserSkillService(BaseService):
         self, user_id: uuid.UUID, skill_id: uuid.UUID, payload: UserSkillUpdate
     ) -> UserSkill:
         entry = await self.get(user_id, skill_id)
-        await self.user_skills.update(entry, payload.model_dump(exclude_unset=True))
+        data = self._sync_proficiency(payload.model_dump(exclude_unset=True), entry.skill)
+        await self.user_skills.update(entry, data)
         await self.commit()
         return entry
+
+    @staticmethod
+    def _sync_proficiency(data: dict, skill: Skill) -> dict:
+        """Keep the canonical proficiency (0..1) in step with a current_level write.
+
+        This interface speaks the 0..level_scale scale; proficiency is derived so
+        both the graph engines and the profile engine see one consistent value.
+        """
+        if "current_level" in data and data["current_level"] is not None:
+            data["proficiency"] = level_to_proficiency(data["current_level"], skill.level_scale)
+        return data
 
     async def delete(self, user_id: uuid.UUID, skill_id: uuid.UUID) -> None:
         entry = await self.get(user_id, skill_id)

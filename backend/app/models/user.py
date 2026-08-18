@@ -102,7 +102,10 @@ class LearnerProfile(UUIDMixin, TimestampMixin, Base):
         unique=True,
     )
     headline: Mapped[str | None] = mapped_column(String(255))
+    # (1) personal learning goal, in the learner's own words.
     goal_text_raw: Mapped[str | None] = mapped_column(Text)
+    # (2) target career / role the learner is aiming for.
+    target_role: Mapped[str | None] = mapped_column(String(255))
     experience_level: Mapped[ExperienceLevel] = mapped_column(
         pg_enum(ExperienceLevel, "experience_level"),
         nullable=False,
@@ -119,6 +122,22 @@ class LearnerProfile(UUIDMixin, TimestampMixin, Base):
     learning_style: Mapped[str | None] = mapped_column(String(64))
     budget_ceiling: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="USD")
+
+    # (8) interests / topics the learner cares about.
+    interests: Mapped[list[str]] = mapped_column(ARRAY(String(64)), nullable=False, default=list)
+    # (6, 7) self-reported completed courses and projects. Each item is a small
+    # dict (title, provider, url, completed_at, ...); kept as JSONB so the shape
+    # can evolve without a migration.
+    completed_courses: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, default=list
+    )
+    completed_projects: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, default=list
+    )
+    # (12) structured learning preferences (pace, difficulty tolerance, ...).
+    learning_preferences: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict
+    )
 
     # Provenance of the extraction step, so low-confidence profiles can be
     # re-confirmed with the learner later.

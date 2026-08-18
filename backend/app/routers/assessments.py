@@ -19,6 +19,7 @@ from app.schemas.assessment import (
 )
 from app.schemas.common import Page
 from app.services.assessment_service import AssessmentService
+from app.services.profile_service import ProfileService
 
 router = APIRouter(prefix="/assessments", tags=["assessments"])
 results_router = APIRouter(prefix="/me/assessment-results", tags=["assessments"])
@@ -158,6 +159,9 @@ async def submit_assessment(
     current_user: CurrentUser,
 ) -> AssessmentResultRead:
     result = await AssessmentService(session).submit(assessment_id, current_user.id, payload)
+    # Grading is complete and committed; now fold the outcome into the learner's
+    # skill proficiencies (deterministic, evidence-weighted).
+    await ProfileService(session).update_proficiency_from_assessment(current_user.id, result)
     return AssessmentResultRead.model_validate(result)
 
 

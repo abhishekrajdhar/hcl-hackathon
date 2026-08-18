@@ -193,6 +193,7 @@ class AssessmentService(BaseService):
                     "response": answer.response,
                     "is_correct": is_correct,
                     "points_awarded": question.points if is_correct else 0.0,
+                    "points_possible": question.points,
                     "time_spent_ms": answer.time_spent_ms,
                 }
             )
