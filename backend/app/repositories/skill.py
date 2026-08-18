@@ -54,6 +54,51 @@ class SkillRepository(BaseRepository[Skill]):
         stmt = self._base_select().where(Skill.slug.in_(list(slugs)))
         return list((await self.session.execute(stmt)).scalars().unique().all())
 
+    async def match_by_similarity(
+        self, term: str, *, limit: int = 5, threshold: float = 0.3
+    ) -> list[tuple[Skill, float]]:
+        """Fuzzy-match a free-text name against skill name/slug via pg_trgm.
+
+        Returns (skill, score) pairs ordered by descending trigram similarity,
+        keeping only rows at or above `threshold`. This is the semantic fallback
+        used when a mentioned skill has no exact catalogue name — it never
+        creates anything, so an unknown or hallucinated skill simply yields a low
+        score (or nothing) instead of polluting the catalogue.
+        """
+        cleaned = term.strip().lower()
+        if not cleaned:
+            return []
+        score = func.greatest(
+            func.similarity(func.lower(Skill.name), cleaned),
+            func.similarity(Skill.slug, cleaned),
+        ).label("score")
+        stmt = (
+            self._base_select()
+            .add_columns(score)
+            .where(Skill.is_active.is_(True), score >= threshold)
+            .order_by(score.desc(), Skill.difficulty, Skill.slug)
+            .limit(limit)
+        )
+        rows = (await self.session.execute(stmt)).unique().all()
+        return [(row[0], float(row[1])) for row in rows]
+
+    async def match_by_name_or_alias(self, term: str) -> Skill | None:
+        """Exact, case-insensitive match on a skill's name or an alias element."""
+        cleaned = term.strip().lower()
+        if not cleaned:
+            return None
+        stmt = self._base_select().where(
+            Skill.is_active.is_(True),
+            or_(func.lower(Skill.name) == cleaned, Skill.aliases.any(cleaned)),
+        )
+        candidates = (await self.session.execute(stmt)).scalars().unique().all()
+        # An exact name match wins over an alias-only match; both are exact, so
+        # order by difficulty then slug for determinism.
+        for skill in sorted(candidates, key=lambda s: (s.difficulty, s.slug)):
+            if skill.name.strip().lower() == cleaned:
+                return skill
+        return candidates[0] if candidates else None
+
     @staticmethod
     def search_filter(term: str) -> Any:
         pattern = f"%{term.lower()}%"

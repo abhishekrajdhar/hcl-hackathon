@@ -19,3 +19,9 @@ greenlet==3.1.1
 # --- Security --------------------------------------------------------------
 PyJWT==2.10.1
 bcrypt==4.2.1
+
+# --- LLM providers ---------------------------------------------------------
+# Selected at runtime via LLM_PROVIDER; imported lazily so the app runs without
+# them when using the default mock provider.
+anthropic==0.44.0
+openai==1.59.6

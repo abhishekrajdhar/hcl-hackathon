@@ -61,6 +61,23 @@ class Settings(BaseSettings):
     EMBEDDING_DIM: int = 384
     EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
 
+    # --- LLM -------------------------------------------------------------
+    # Provider is chosen here, never hard-coded in application code. Credentials
+    # come from the environment; "mock" needs none and is the safe default so
+    # the app runs in dev and CI without any API key.
+    LLM_PROVIDER: Literal["mock", "claude", "openai"] = "mock"
+    LLM_TEMPERATURE: float = 0.0
+    LLM_MAX_TOKENS: int = 1024
+    LLM_TIMEOUT_SECONDS: float = 30.0
+    LLM_MAX_REPAIR_ATTEMPTS: int = 1
+
+    ANTHROPIC_API_KEY: str | None = None
+    ANTHROPIC_MODEL: str = "claude-sonnet-4-5"
+
+    OPENAI_API_KEY: str | None = None
+    OPENAI_MODEL: str = "gpt-4o-mini"
+    OPENAI_BASE_URL: str | None = None
+
     # --- Logging ---------------------------------------------------------
     LOG_LEVEL: str = "INFO"
     LOG_FORMAT: Literal["json", "console"] = "json"

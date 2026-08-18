@@ -13,6 +13,7 @@ from app.core.config import settings
 from app.core.errors import ForbiddenError, UnauthorizedError
 from app.core.security import decode_access_token
 from app.db.session import get_session
+from app.llm.base import LLMProvider
 from app.models.enums import UserRole
 from app.models.user import User
 from app.repositories.user import UserRepository
@@ -74,3 +75,18 @@ async def get_current_admin(user: CurrentUser) -> User:
 
 
 AdminUser = Annotated[User, Depends(get_current_admin)]
+
+
+def get_llm_provider_dep() -> LLMProvider:
+    """The configured LLM provider (settings-driven, cached).
+
+    Wrapped in a dependency so tests can override it with a seeded MockProvider
+    via FastAPI dependency overrides — the provider is never hard-coded in a
+    router.
+    """
+    from app.llm.factory import get_llm_provider
+
+    return get_llm_provider()
+
+
+LLMProviderDep = Annotated[LLMProvider, Depends(get_llm_provider_dep)]

@@ -14,10 +14,11 @@ import uuid
 
 from fastapi import APIRouter, status
 
-from app.core.deps import CurrentUser, SessionDep
+from app.core.deps import CurrentUser, LLMProviderDep, SessionDep
 from app.core.errors import ForbiddenError
 from app.models.enums import UserRole
 from app.models.user import User
+from app.schemas.extraction import ProfileExtractRequest, ProfileExtractResponse
 from app.schemas.profile import (
     FullLearnerProfile,
     LearnerProfileCreate,
@@ -30,6 +31,7 @@ from app.schemas.profile import (
     SkillProficiencyRead,
     SkillProficiencyUpdate,
 )
+from app.services.profile_extraction_service import ProfileExtractionService
 from app.services.profile_ingest import default_extractor
 from app.services.profile_service import ProfileService
 
@@ -72,6 +74,26 @@ async def update_my_profile(
 @router.delete("", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def delete_my_profile(session: SessionDep, current_user: CurrentUser) -> None:
     await ProfileService(session).delete_for_user(current_user.id)
+
+
+# --- LLM extraction (message -> validated structured profile) --------------
+@router.post(
+    "/extract",
+    response_model=ProfileExtractResponse,
+    summary="Extract a structured profile from a natural-language message",
+)
+async def extract_profile(
+    payload: ProfileExtractRequest,
+    session: SessionDep,
+    provider: LLMProviderDep,
+    current_user: CurrentUser,
+) -> ProfileExtractResponse:
+    """User message → LLM → validated ProfileExtraction → business validation →
+    (optionally) ProfileService. The LLM never writes; only catalogue-resolved
+    skills are persisted, and only when `apply` is true."""
+    _authorize(payload.user_id, current_user)
+    service = ProfileExtractionService(session, provider)
+    return await service.extract(payload.user_id, payload.message, apply=payload.apply)
 
 
 # --- explicit user (self or admin) -----------------------------------------
