@@ -158,3 +158,10 @@ class RecommendationStatus(StrEnum):
     ACCEPTED = "accepted"
     DISMISSED = "dismissed"
     EXPIRED = "expired"
+
+
+class ChatRole(StrEnum):
+    USER = "user"
+    ASSISTANT = "assistant"
+    SYSTEM = "system"
+    TOOL = "tool"

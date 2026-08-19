@@ -29,6 +29,7 @@ from app.models.types import pg_enum
 
 if TYPE_CHECKING:
     from app.models.assessment import AssessmentResult
+    from app.models.conversation import Conversation
     from app.models.feedback import Feedback
     from app.models.goal import LearningGoal
     from app.models.path import LearningPath
@@ -66,6 +67,9 @@ class User(UUIDMixin, TimestampMixin, Base):
         back_populates="user", cascade="all, delete-orphan"
     )
     feedback_entries: Mapped[list["Feedback"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    conversations: Mapped[list["Conversation"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
     recommendations: Mapped[list["Recommendation"]] = relationship(

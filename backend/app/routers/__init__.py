@@ -7,6 +7,7 @@ from app.routers import (
     adaptive,
     assessments,
     auth,
+    chat,
     feedback,
     goals,
     health,
@@ -48,5 +49,6 @@ api_router.include_router(search.router)
 api_router.include_router(skill_gap.router)
 api_router.include_router(learning_path.router)
 api_router.include_router(adaptive.router)
+api_router.include_router(chat.router)
 
 __all__ = ["api_router", "health_router"]

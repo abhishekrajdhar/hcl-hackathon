@@ -2,6 +2,7 @@
 
 from app.models.assessment import Assessment, AssessmentQuestion, AssessmentResult
 from app.models.base import Base
+from app.models.conversation import Conversation, ConversationMessage
 from app.models.feedback import Feedback
 from app.models.goal import LearningGoal, LearningGoalSkill
 from app.models.path import LearningPath, LearningPathItem
@@ -16,6 +17,8 @@ __all__ = [
     "AssessmentQuestion",
     "AssessmentResult",
     "Base",
+    "Conversation",
+    "ConversationMessage",
     "Feedback",
     "LearnerProfile",
     "LearningGoal",
