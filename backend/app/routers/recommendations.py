@@ -11,17 +11,53 @@ import uuid
 
 from fastapi import APIRouter, status
 
-from app.core.deps import AdminUser, CurrentUser, PaginationDep, SessionDep
+from app.core.deps import (
+    AdminUser,
+    CurrentUser,
+    EmbeddingCacheDep,
+    EmbeddingProviderDep,
+    PaginationDep,
+    SessionDep,
+)
 from app.models.enums import RecommendationStatus
 from app.schemas.common import Page
 from app.schemas.recommendation import (
     RecommendationCreate,
     RecommendationRead,
+    RecommendationRequest,
+    RecommendationResponse,
     RecommendationStatusUpdate,
 )
+from app.services.recommendation_engine_service import RecommendationEngineService
 from app.services.recommendation_service import RecommendationService
 
 router = APIRouter(prefix="/recommendations", tags=["recommendations"])
+
+
+@router.post(
+    "",
+    response_model=RecommendationResponse,
+    summary="Generate ranked, prerequisite-aware resource recommendations",
+)
+async def generate_recommendations(
+    payload: RecommendationRequest,
+    session: SessionDep,
+    provider: EmbeddingProviderDep,
+    cache: EmbeddingCacheDep,
+    current_user: CurrentUser,
+) -> RecommendationResponse:
+    """Hybrid ranking over the learner's gaps, semantic similarity, prerequisite
+    readiness, difficulty, preferences, quality and history. Ownership (self or
+    admin) is enforced inside the service before any of the learner's data is
+    read."""
+    from app.models.enums import UserRole
+
+    service = RecommendationEngineService(session, provider, cache)
+    return await service.recommend_resources(
+        payload,
+        requesting_user_id=current_user.id,
+        is_admin=current_user.role == UserRole.ADMIN,
+    )
 
 
 @router.get("", response_model=Page[RecommendationRead])

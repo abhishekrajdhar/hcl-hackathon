@@ -15,6 +15,7 @@ from app.routers import (
     recommendations,
     resources,
     search,
+    skill_gap,
     skills,
     user_skills,
     users,
@@ -42,5 +43,6 @@ api_router.include_router(feedback.router)
 api_router.include_router(recommendations.router)
 api_router.include_router(recommendations.admin_router)
 api_router.include_router(search.router)
+api_router.include_router(skill_gap.router)
 
 __all__ = ["api_router", "health_router"]
