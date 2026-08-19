@@ -4,6 +4,7 @@ from fastapi import APIRouter
 
 from app.core.config import settings
 from app.routers import (
+    adaptive,
     assessments,
     auth,
     feedback,
@@ -46,5 +47,6 @@ api_router.include_router(recommendations.admin_router)
 api_router.include_router(search.router)
 api_router.include_router(skill_gap.router)
 api_router.include_router(learning_path.router)
+api_router.include_router(adaptive.router)
 
 __all__ = ["api_router", "health_router"]

@@ -20,12 +20,12 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import ConflictError, NotFoundError
+from app.engines.adaptive import update_from_assessment
 from app.engines.profile import (
     ProfileSnapshot,
     assessment_skill_scores,
-    blend_proficiency,
+    clamp01,
     evidence_strength,
-    observation_weight,
     proficiency_to_level,
     validate_profile,
 )
@@ -346,10 +346,9 @@ class ProfileService(BaseService):
     ) -> ProficiencyUpdateReport:
         """Fold an assessment result into the learner's proficiency vector.
 
-        Deterministic and bounded: each assessed skill moves toward its observed
-        score by an evidence-weighted step (assessments outweigh self-reports,
-        longer assessments outweigh shorter ones), capped per event. Every change
-        is reported for auditing. Commits its own transaction.
+        Deterministic MVP rule (spec): new = 0.6*old + 0.4*assessment_score,
+        applied per assessed skill. Every change is reported for auditing.
+        Commits its own transaction.
         """
         assessment = await self.assessments.get(result.assessment_id)
         fallback_skill_id = assessment.skill_id if assessment else None
@@ -364,55 +363,46 @@ class ProfileService(BaseService):
             if skill is None:
                 continue  # question tagged to a since-deleted skill
 
-            weight = observation_weight(
-                EvidenceSource.ASSESSMENT, strength=evidence_strength(score.total)
-            )
             entry = await self.user_skills.get_for_user(user_id, score.skill_id)
+            strength = evidence_strength(score.total)  # confidence grows with more questions
 
             if entry is None:
-                update = blend_proficiency(
-                    0.0, score.ratio, weight=weight, prior_confidence=_NEW_SKILL_CONFIDENCE
-                )
+                previous = 0.0
+                new_proficiency = update_from_assessment(previous, score.ratio)
                 await self._write_proficiency(
                     user_id,
                     skill,
-                    proficiency=update.new_proficiency,
-                    confidence=update.new_confidence,
+                    proficiency=new_proficiency,
+                    confidence=clamp01(_NEW_SKILL_CONFIDENCE + strength * (1 - _NEW_SKILL_CONFIDENCE)),
                     evidence_source=EvidenceSource.ASSESSMENT,
                     last_practiced_at=now,
                 )
                 changes.append(
                     ProficiencyChange(
                         skill_id=score.skill_id,
-                        previous_proficiency=0.0,
-                        new_proficiency=update.new_proficiency,
-                        delta=update.delta,
+                        previous_proficiency=previous,
+                        new_proficiency=new_proficiency,
+                        delta=round(new_proficiency - previous, 6),
                         observed=score.ratio,
                         evidence_source=EvidenceSource.ASSESSMENT,
                         created=True,
                     )
                 )
             else:
-                update = blend_proficiency(
-                    entry.proficiency,
-                    score.ratio,
-                    weight=weight,
-                    prior_confidence=entry.confidence,
-                )
-                entry.proficiency = update.new_proficiency
-                entry.current_level = proficiency_to_level(
-                    update.new_proficiency, skill.level_scale
-                )
-                entry.confidence = update.new_confidence
+                previous = entry.proficiency
+                new_proficiency = update_from_assessment(previous, score.ratio)
+                entry.proficiency = new_proficiency
+                entry.current_level = proficiency_to_level(new_proficiency, skill.level_scale)
+                entry.confidence = clamp01(entry.confidence + strength * (1 - entry.confidence))
                 entry.evidence_source = EvidenceSource.ASSESSMENT
                 entry.last_practiced_at = now
                 await self.session.flush()
                 changes.append(
                     ProficiencyChange(
                         skill_id=score.skill_id,
-                        previous_proficiency=update.prior,
-                        new_proficiency=update.new_proficiency,
-                        delta=update.delta,
+                        previous_proficiency=round(previous, 6),
+                        new_proficiency=new_proficiency,
+                        delta=round(new_proficiency - previous, 6),
                         observed=score.ratio,
                         evidence_source=EvidenceSource.ASSESSMENT,
                         created=False,

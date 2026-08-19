@@ -347,6 +347,7 @@ class PathGeneratorService(BaseService):
             trace = {
                 **item.rationale,
                 **phase_meta.get(item.phase_index, {}),
+                "skill_id": str(item.skill_id) if item.skill_id else None,
                 "current_level": milestone.current_level if milestone else None,
                 "required_level": milestone.required_level if milestone else None,
                 "gap": milestone.gap if milestone else None,
