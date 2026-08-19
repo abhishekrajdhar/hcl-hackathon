@@ -247,6 +247,93 @@ class AssessmentService(BaseService):
         total = await self.results.count([AssessmentResult.user_id == user_id])
         return items, total
 
+    async def submit_and_report(
+        self, assessment_id: uuid.UUID, user_id: uuid.UUID, payload: AssessmentSubmission
+    ):  # type: ignore[no-untyped-def]
+        """Grade, update proficiency, and return the full learner-facing report.
+
+        Every number here is computed deterministically: grading is exact-match,
+        the mastery band is a pure threshold map, and proficiency updates are the
+        evidence-weighted engine — the LLM is never consulted for a score.
+        """
+        from app.engines.assessment import (
+            mastery_level,
+            recommended_next_action,
+        )
+        from app.engines.assessment import (
+            weak_topics as compute_weak_topics,
+        )
+        from app.repositories.skill import SkillRepository
+        from app.schemas.assessment import AssessmentResultRead
+        from app.schemas.assessment_gen import (
+            AssessmentSubmitReport,
+            SkillUpdate,
+            WeakTopicRead,
+        )
+        from app.services.profile_service import ProfileService
+
+        result = await self.submit(assessment_id, user_id, payload)
+        prof_report = await ProfileService(self.session).update_proficiency_from_assessment(
+            user_id, result
+        )
+
+        skill_ids = {
+            uuid.UUID(str(r["skill_id"]))
+            for r in result.responses
+            if r.get("skill_id")
+        }
+        skill_ids.update(c.skill_id for c in prof_report.changes)
+        skills = SkillRepository(self.session)
+        names = {s.id: s.name for s in await skills.get_many(sorted(skill_ids))}
+
+        weak = compute_weak_topics(result.responses, names)
+        mastery = mastery_level(result.percentage)
+        next_action = recommended_next_action(
+            result.percentage, [w.skill_name for w in weak]
+        )
+
+        return AssessmentSubmitReport(
+            result=AssessmentResultRead.model_validate(result),
+            score=result.score,
+            percentage=round(result.percentage, 4),
+            passed=result.passed,
+            mastery_level=mastery,
+            skill_updates=[
+                SkillUpdate(
+                    skill_id=c.skill_id,
+                    skill_name=names.get(c.skill_id),
+                    previous_proficiency=c.previous_proficiency,
+                    new_proficiency=c.new_proficiency,
+                    delta=c.delta,
+                )
+                for c in prof_report.changes
+            ],
+            weak_topics=[
+                WeakTopicRead(
+                    skill_id=w.skill_id,
+                    skill_name=w.skill_name,
+                    correct=w.correct,
+                    total=w.total,
+                    ratio=round(w.ratio, 4),
+                )
+                for w in weak
+            ],
+            recommended_next_action=next_action,
+        )
+
+    async def list_results_for_assessment(
+        self, assessment_id: uuid.UUID, user_id: uuid.UUID
+    ) -> list[AssessmentResult]:
+        await self.get(assessment_id)
+        return await self.results.list(
+            limit=100,
+            filters=[
+                AssessmentResult.assessment_id == assessment_id,
+                AssessmentResult.user_id == user_id,
+            ],
+            order_by=(AssessmentResult.created_at.desc(),),
+        )
+
     async def get_result(self, result_id: uuid.UUID, user_id: uuid.UUID) -> AssessmentResult:
         result = await self.results.get(result_id)
         if result is None or result.user_id != user_id:

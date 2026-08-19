@@ -84,7 +84,8 @@ class LearningPathItem(UUIDMixin, TimestampMixin, Base):
         UniqueConstraint("path_id", "order_index", name="uq_learning_path_items_path_id_order_index"),
         CheckConstraint("order_index >= 0", name="order_index_non_negative"),
         CheckConstraint(
-            "resource_id IS NOT NULL OR assessment_id IS NOT NULL",
+            "resource_id IS NOT NULL OR assessment_id IS NOT NULL "
+            "OR item_type = 'milestone_review'",
             name="item_targets_resource_or_assessment",
         ),
         Index("ix_learning_path_items_path_id_milestone_index", "path_id", "milestone_index"),

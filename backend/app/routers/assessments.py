@@ -4,7 +4,13 @@ import uuid
 
 from fastapi import APIRouter, status
 
-from app.core.deps import AdminUser, CurrentUser, PaginationDep, SessionDep
+from app.core.deps import (
+    AdminUser,
+    CurrentUser,
+    LLMProviderDep,
+    PaginationDep,
+    SessionDep,
+)
 from app.models.enums import AssessmentType
 from app.schemas.assessment import (
     AssessmentCreate,
@@ -17,9 +23,14 @@ from app.schemas.assessment import (
     QuestionCreate,
     QuestionUpdate,
 )
+from app.schemas.assessment_gen import (
+    AssessmentSubmitReport,
+    GenerateAssessmentRequest,
+    GeneratedAssessmentInfo,
+)
 from app.schemas.common import Page
+from app.services.assessment_generation_service import AssessmentGenerationService
 from app.services.assessment_service import AssessmentService
-from app.services.profile_service import ProfileService
 
 router = APIRouter(prefix="/assessments", tags=["assessments"])
 results_router = APIRouter(prefix="/me/assessment-results", tags=["assessments"])
@@ -69,6 +80,24 @@ async def create_assessment(
     assessment = await AssessmentService(session).create(payload)
     detail = AssessmentDetail.model_validate(assessment)
     return detail.model_copy(update={"question_count": len(assessment.questions)})
+
+
+@router.post(
+    "/generate",
+    response_model=GeneratedAssessmentInfo,
+    status_code=status.HTTP_201_CREATED,
+    summary="Generate a multiple-choice assessment for a skill",
+)
+async def generate_assessment(
+    payload: GenerateAssessmentRequest,
+    session: SessionDep,
+    provider: LLMProviderDep,
+    _: CurrentUser,
+) -> GeneratedAssessmentInfo:
+    """The LLM may write the questions, but every question is validated against a
+    strict schema before storage; if the LLM is unavailable or its output is
+    invalid, a deterministic template generator is used. Grading stays exact-match."""
+    return await AssessmentGenerationService(session, provider).generate(payload)
 
 
 @router.get(
@@ -148,9 +177,9 @@ async def delete_question(
 # --- attempts --------------------------------------------------------------
 @router.post(
     "/{assessment_id}/submit",
-    response_model=AssessmentResultRead,
+    response_model=AssessmentSubmitReport,
     status_code=status.HTTP_201_CREATED,
-    summary="Submit answers and receive a graded result",
+    summary="Submit answers; receive score, mastery, skill updates, weak topics, next action",
 )
 async def submit_assessment(
     assessment_id: uuid.UUID,
@@ -158,11 +187,23 @@ async def submit_assessment(
     session: SessionDep,
     current_user: CurrentUser,
 ) -> AssessmentResultRead:
-    result = await AssessmentService(session).submit(assessment_id, current_user.id, payload)
-    # Grading is complete and committed; now fold the outcome into the learner's
-    # skill proficiencies (deterministic, evidence-weighted).
-    await ProfileService(session).update_proficiency_from_assessment(current_user.id, result)
-    return AssessmentResultRead.model_validate(result)
+    return await AssessmentService(session).submit_and_report(
+        assessment_id, current_user.id, payload
+    )
+
+
+@router.get(
+    "/{assessment_id}/results",
+    response_model=list[AssessmentResultRead],
+    summary="The current learner's results for an assessment",
+)
+async def get_assessment_results(
+    assessment_id: uuid.UUID, session: SessionDep, current_user: CurrentUser
+) -> list[AssessmentResultRead]:
+    results = await AssessmentService(session).list_results_for_assessment(
+        assessment_id, current_user.id
+    )
+    return [AssessmentResultRead.model_validate(r) for r in results]
 
 
 @results_router.get("", response_model=Page[AssessmentResultRead])

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.models.enums import ExperienceLevel
 
@@ -67,3 +67,43 @@ class ProfileExtraction(BaseModel):
 #: from the model so it can never drift from the validated type.
 def extraction_json_schema() -> dict[str, Any]:
     return ProfileExtraction.model_json_schema()
+
+
+# --- assessment question generation ----------------------------------------
+class GeneratedOption(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    key: str = Field(min_length=1, max_length=4)
+    text: str = Field(min_length=1, max_length=500)
+
+
+class GeneratedQuestion(BaseModel):
+    """One multiple-choice question the LLM proposes. Validated before use — a
+    malformed or unkeyed question is rejected, never scored."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    stem: str = Field(min_length=1, max_length=1000)
+    options: list[GeneratedOption] = Field(min_length=2, max_length=6)
+    correct_key: str = Field(min_length=1, max_length=4)
+    explanation: str = Field(default="", max_length=1000)
+    difficulty: int = Field(default=1, ge=1, le=5)
+
+    @model_validator(mode="after")
+    def _correct_key_in_options(self) -> "GeneratedQuestion":
+        keys = [o.key for o in self.options]
+        if self.correct_key not in keys:
+            raise ValueError("correct_key must match one of the option keys")
+        if len(keys) != len(set(keys)):
+            raise ValueError("option keys must be unique")
+        return self
+
+
+class GeneratedAssessment(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    questions: list[GeneratedQuestion] = Field(min_length=1, max_length=30)
+
+
+def generated_assessment_schema() -> dict[str, Any]:
+    return GeneratedAssessment.model_json_schema()

@@ -16,11 +16,13 @@ from app.core.deps import (
     CurrentUser,
     EmbeddingCacheDep,
     EmbeddingProviderDep,
+    LLMProviderDep,
     PaginationDep,
     SessionDep,
 )
 from app.models.enums import RecommendationStatus
 from app.schemas.common import Page
+from app.schemas.explanation import ExplanationRequest, ExplanationResponse
 from app.schemas.recommendation import (
     RecommendationCreate,
     RecommendationRead,
@@ -28,6 +30,7 @@ from app.schemas.recommendation import (
     RecommendationResponse,
     RecommendationStatusUpdate,
 )
+from app.services.explanation_service import ExplanationService
 from app.services.recommendation_engine_service import RecommendationEngineService
 from app.services.recommendation_service import RecommendationService
 
@@ -100,6 +103,32 @@ async def set_status(
         recommendation_id, current_user.id, payload.status
     )
     return RecommendationRead.model_validate(entry)
+
+
+@router.post(
+    "/{recommendation_id}/explanation",
+    response_model=ExplanationResponse,
+    summary="Explain a recommendation from structured evidence (grounded)",
+)
+async def explain_recommendation(
+    recommendation_id: uuid.UUID,
+    payload: ExplanationRequest,
+    session: SessionDep,
+    provider: LLMProviderDep,
+    current_user: CurrentUser,
+) -> ExplanationResponse:
+    """Builds RecommendationEvidence, asks the LLM to explain it, and rejects any
+    output that introduces an unsupported number or skill (falling back to a
+    deterministic, grounded template). Kinds: why_course, why_now, why_order,
+    why_project, why_assessment."""
+    from app.models.enums import UserRole
+
+    return await ExplanationService(session, provider).explain(
+        recommendation_id,
+        payload,
+        requesting_user_id=current_user.id,
+        is_admin=current_user.role == UserRole.ADMIN,
+    )
 
 
 @router.delete("/{recommendation_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)

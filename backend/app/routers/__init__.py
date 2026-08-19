@@ -9,6 +9,7 @@ from app.routers import (
     feedback,
     goals,
     health,
+    learning_path,
     paths,
     profiles,
     progress,
@@ -44,5 +45,6 @@ api_router.include_router(recommendations.router)
 api_router.include_router(recommendations.admin_router)
 api_router.include_router(search.router)
 api_router.include_router(skill_gap.router)
+api_router.include_router(learning_path.router)
 
 __all__ = ["api_router", "health_router"]

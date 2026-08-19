@@ -124,6 +124,8 @@ class QuestionType(StrEnum):
     MULTIPLE_CHOICE = "multiple_choice"
     TRUE_FALSE = "true_false"
     SHORT_ANSWER = "short_answer"
+    CODING = "coding"
+    CONCEPTUAL = "conceptual"
 
 
 class ProgressEventType(StrEnum):
