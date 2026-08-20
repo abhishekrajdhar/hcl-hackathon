@@ -267,3 +267,96 @@ export interface Paginated<T> {
   limit: number;
   offset: number;
 }
+
+// ---- progress / adaptive / feedback (learner actions) ----------------------
+
+export type ProgressEventType =
+  | "started"
+  | "progressed"
+  | "completed"
+  | "skipped"
+  | "abandoned";
+
+export interface ProgressEventCreate {
+  path_item_id?: UUID;
+  resource_id?: UUID;
+  event_type: ProgressEventType;
+  progress_pct?: number; // 0..100
+  time_spent_minutes?: number;
+  details?: Record<string, unknown>;
+}
+
+export type AdaptiveTrigger =
+  | "assessment"
+  | "resource_completed"
+  | "resource_skipped"
+  | "explicit";
+
+export interface ExplicitSkillScore {
+  skill_id?: UUID;
+  skill_slug?: string;
+  score: number; // 0..1
+}
+
+/** Exactly one trigger must be set (see backend validator). */
+export interface AdaptiveUpdateRequest {
+  user_id: UUID;
+  assessment_result_id?: UUID;
+  completed_resource_id?: UUID;
+  skipped_resource_id?: UUID;
+  skill_scores?: ExplicitSkillScore[];
+  feedback?: string;
+  time_spent_minutes?: number;
+}
+
+export interface UpdatedSkillRead {
+  skill_id: UUID;
+  skill_name: string | null;
+  previous_proficiency: number;
+  new_proficiency: number;
+  delta: number;
+  mastery_level: string;
+  level_band: "advanced" | "intermediate" | "foundational" | "remedial";
+}
+
+export interface AdaptiveMilestoneRead {
+  skill_id: UUID | null;
+  title: string;
+  phase_title: string;
+  phase_index: number;
+}
+
+export interface AdaptiveResourceItemRead {
+  resource_id: UUID | null;
+  item_id: UUID | null;
+  title: string;
+  reason: string | null;
+}
+
+export interface AdaptiveUpdateResponse {
+  user_id: UUID;
+  trigger: AdaptiveTrigger;
+  updated_skills: UpdatedSkillRead[];
+  completed_milestones: AdaptiveMilestoneRead[];
+  unlocked_milestones: AdaptiveMilestoneRead[];
+  removed_resources: AdaptiveResourceItemRead[];
+  newly_recommended_resources: AdaptiveResourceItemRead[];
+  next_recommended_action: string;
+}
+
+export type FeedbackSignal = "up" | "down" | "too_easy" | "too_hard";
+
+export type FeedbackTargetType =
+  | "resource"
+  | "path"
+  | "path_item"
+  | "recommendation"
+  | "assessment";
+
+export interface FeedbackCreate {
+  target_type: FeedbackTargetType;
+  target_id: UUID;
+  signal: FeedbackSignal;
+  rating?: number; // 1..5
+  comment?: string;
+}

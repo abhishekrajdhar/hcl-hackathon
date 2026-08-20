@@ -5,7 +5,13 @@ import { api, auth, getToken } from "@/lib/api";
 import type { DashboardData } from "@/lib/dashboard-data";
 import { buildDashboardData } from "@/lib/derive";
 import { demoData } from "@/lib/demo";
-import type { ProgressEvent, ProgressSummary, RecommendationResponse } from "@/lib/types";
+import { patchDashboardFromAdaptive } from "@/lib/adaptive";
+import type {
+  AdaptiveUpdateResponse,
+  ProgressEvent,
+  ProgressSummary,
+  RecommendationResponse,
+} from "@/lib/types";
 
 type State = {
   data: DashboardData;
@@ -16,7 +22,10 @@ type State = {
 
 // Loads the signed-in learner's dashboard through the API layer, falling back to
 // the bundled demo dataset when signed out or when core data is unavailable.
-export function useDashboardData(): State & { reload: () => void } {
+export function useDashboardData(): State & {
+  reload: () => void;
+  applyAdaptive: (res: AdaptiveUpdateResponse) => void;
+} {
   const [state, setState] = useState<State>({
     data: demoData,
     loading: true,
@@ -71,5 +80,11 @@ export function useDashboardData(): State & { reload: () => void } {
     void load();
   }, [load]);
 
-  return { ...state, reload: () => void load() };
+  // Apply an adaptive result to the in-memory data so skill/roadmap bars animate
+  // immediately. In live mode `reload()` then reconciles with backend truth.
+  const applyAdaptive = useCallback((res: AdaptiveUpdateResponse) => {
+    setState((s) => ({ ...s, data: patchDashboardFromAdaptive(s.data, res) }));
+  }, []);
+
+  return { ...state, reload: () => void load(), applyAdaptive };
 }

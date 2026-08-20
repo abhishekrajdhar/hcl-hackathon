@@ -26,6 +26,7 @@ import {
   type RoadmapView,
 } from "@/lib/roadmap-view";
 import type { DashboardData } from "@/lib/dashboard-data";
+import { useProgress } from "@/lib/progress-context";
 import { ResourceModal } from "./ResourceModal";
 
 // Visual identity per state — shared across nodes, badges and rails.
@@ -39,9 +40,14 @@ const STATE: Record<
   locked: { badge: "neutral", ring: "border-border bg-surface text-muted", rail: "bg-border", bar: "brand" },
 };
 
+interface OpenResource {
+  resource: RoadmapResource;
+  milestone: RoadmapMilestone;
+}
+
 export function Roadmap({ data }: { data: DashboardData }) {
   const roadmap: RoadmapView = data.roadmap;
-  const [open, setOpen] = useState<RoadmapResource | null>(null);
+  const [open, setOpen] = useState<OpenResource | null>(null);
   // Default-expand the current phase (fall back to the first non-completed one).
   const initial =
     roadmap.phases.find((p) => p.state === "current")?.index ??
@@ -80,14 +86,18 @@ export function Roadmap({ data }: { data: DashboardData }) {
                 phase={phase}
                 expanded={expanded.has(phase.index)}
                 onToggle={() => toggle(phase.index)}
-                onOpenResource={setOpen}
+                onOpenResource={(resource, milestone) => setOpen({ resource, milestone })}
               />
             </div>
           ))}
         </div>
       </CardBody>
 
-      <ResourceModal resource={open} onClose={() => setOpen(null)} />
+      <ResourceModal
+        resource={open?.resource ?? null}
+        milestone={open?.milestone ?? null}
+        onClose={() => setOpen(null)}
+      />
     </Card>
   );
 }
@@ -150,7 +160,7 @@ function PhaseNode({
   phase: RoadmapPhase;
   expanded: boolean;
   onToggle: () => void;
-  onOpenResource: (r: RoadmapResource) => void;
+  onOpenResource: (r: RoadmapResource, m: RoadmapMilestone) => void;
 }) {
   const s = STATE[phase.state];
   return (
@@ -234,10 +244,13 @@ function MilestoneCard({
   onOpenResource,
 }: {
   milestone: RoadmapMilestone;
-  onOpenResource: (r: RoadmapResource) => void;
+  onOpenResource: (r: RoadmapResource, m: RoadmapMilestone) => void;
 }) {
   const s = STATE[m.state];
   const locked = m.state === "locked";
+  const { submitAssessment, completeResource, pending } = useProgress();
+  // A passing score that clears the target — demonstrates the adaptive jump.
+  const passScore = Math.min(0.95, Math.max(m.required + 0.08, 0.75));
   return (
     <div
       className={clsx(
@@ -308,7 +321,12 @@ function MilestoneCard({
       {(m.resources.length > 0 || m.assessment || m.project) && (
         <div className="mt-3 space-y-1.5">
           {m.resources.map((r) => (
-            <ResourceRow key={r.id} resource={r} onOpen={() => onOpenResource(r)} />
+            <ResourceRow
+              key={r.id}
+              resource={r}
+              milestone={m}
+              onOpen={() => onOpenResource(r, m)}
+            />
           ))}
 
           {m.assessment && (
@@ -317,6 +335,13 @@ function MilestoneCard({
               label={m.assessment.title}
               meta={`Checkpoint · ${Math.round(m.assessment.passingPct * 100)}% to pass · ${hoursFromMinutes(m.assessment.estimatedMinutes)}`}
               state={m.assessment.status}
+              action={
+                m.assessment.status !== "locked" && m.assessment.status !== "completed" ? (
+                  <RowButton disabled={pending} onClick={() => submitAssessment(m, passScore)}>
+                    Submit result
+                  </RowButton>
+                ) : undefined
+              }
             />
           )}
 
@@ -326,6 +351,16 @@ function MilestoneCard({
               label={m.project.title}
               meta={`Project · ${hoursFromMinutes(m.project.estimatedMinutes)}`}
               state={m.project.status}
+              action={
+                m.project.status !== "locked" && m.project.status !== "completed" ? (
+                  <RowButton
+                    disabled={pending}
+                    onClick={() => completeResource(m, projectAsResource(m))}
+                  >
+                    Mark complete
+                  </RowButton>
+                ) : undefined
+              }
             />
           )}
         </div>
@@ -334,17 +369,62 @@ function MilestoneCard({
   );
 }
 
+/** Adapt a milestone's project into a RoadmapResource for the complete action. */
+function projectAsResource(m: RoadmapMilestone): RoadmapResource {
+  const p = m.project!;
+  return {
+    id: p.id,
+    title: p.title,
+    kind: "project",
+    type: "project",
+    provider: "",
+    description: p.description,
+    url: "",
+    estimatedMinutes: p.estimatedMinutes,
+    difficulty: 0,
+    skills: p.skills,
+    prerequisites: [],
+    why: "",
+    status: p.status,
+    isOptional: false,
+  };
+}
+
+function RowButton({
+  onClick,
+  disabled,
+  children,
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="shrink-0 rounded-md bg-brand px-2 py-1 text-[11px] font-medium text-white hover:opacity-90 disabled:opacity-50"
+    >
+      {children}
+    </button>
+  );
+}
+
 // ---- resource row (clickable → modal; "Why this?" → inline reveal) ---------
 
 function ResourceRow({
   resource: r,
+  milestone,
   onOpen,
 }: {
   resource: RoadmapResource;
+  milestone: RoadmapMilestone;
   onOpen: () => void;
 }) {
   const [whyOpen, setWhyOpen] = useState(false);
+  const { completeResource, pending } = useProgress();
   const s = STATE[r.status];
+  const done = r.status === "completed";
   return (
     <div className="rounded-lg border border-border bg-surface">
       <div className="flex items-center gap-2 p-2">
@@ -356,6 +436,21 @@ function ResourceRow({
             {r.provider && ` · ${r.provider}`} · {hoursFromMinutes(r.estimatedMinutes)}
           </span>
         </button>
+        {!done && r.status !== "locked" && (
+          <button
+            onClick={() => completeResource(milestone, r)}
+            disabled={pending}
+            title="Mark complete"
+            className="hidden shrink-0 items-center gap-1 rounded-md border border-success/30 bg-success/10 px-2 py-1 text-[11px] font-medium text-success hover:bg-success/20 disabled:opacity-50 sm:inline-flex"
+          >
+            <IconCheck className="h-3 w-3" /> Complete
+          </button>
+        )}
+        {done && (
+          <span className="hidden shrink-0 items-center gap-1 rounded-md bg-success/10 px-2 py-1 text-[11px] font-medium text-success sm:inline-flex">
+            <IconCheck className="h-3 w-3" /> Done
+          </span>
+        )}
         {r.why && (
           <button
             onClick={() => setWhyOpen((o) => !o)}
@@ -396,11 +491,13 @@ function ItemRow({
   label,
   meta,
   state,
+  action,
 }: {
   icon: React.ReactNode;
   label: string;
   meta: string;
   state: RoadmapState;
+  action?: React.ReactNode;
 }) {
   const s = STATE[state];
   return (
@@ -421,6 +518,7 @@ function ItemRow({
         <span className="block truncate text-sm font-medium">{label}</span>
         <span className="block truncate text-[11px] text-muted">{meta}</span>
       </div>
+      {action}
       <span className={clsx("h-1.5 w-1.5 shrink-0 rounded-full", s.rail)} title={STATE_LABEL[state]} />
     </div>
   );

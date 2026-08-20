@@ -15,7 +15,8 @@ import {
 } from "@/components/ui/icons";
 import { clsx } from "@/lib/cn";
 import { difficultyLabel, hoursFromMinutes } from "@/lib/format";
-import { STATE_LABEL, type RoadmapResource } from "@/lib/roadmap-view";
+import { STATE_LABEL, type RoadmapMilestone, type RoadmapResource } from "@/lib/roadmap-view";
+import { useProgress } from "@/lib/progress-context";
 
 const STATE_TONE = {
   completed: "success",
@@ -27,11 +28,15 @@ const STATE_TONE = {
 /** Detail overlay for a clicked resource: info, time, skills, prereqs, why. */
 export function ResourceModal({
   resource,
+  milestone,
   onClose,
 }: {
   resource: RoadmapResource | null;
+  milestone: RoadmapMilestone | null;
   onClose: () => void;
 }) {
+  const { completeResource, skipResource, sendFeedback, pending } = useProgress();
+
   useEffect(() => {
     if (!resource) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -143,6 +148,53 @@ export function ResourceModal({
           )}
         </div>
 
+        {/* progress actions — drive the adaptive backend */}
+        {!locked && milestone && (
+          <div className="flex flex-wrap items-center gap-2 border-t border-border px-5 py-3">
+            <Button
+              size="sm"
+              variant="primary"
+              disabled={pending}
+              onClick={async () => {
+                await completeResource(milestone, resource);
+                onClose();
+              }}
+            >
+              <IconCheck className="h-3.5 w-3.5" />
+              Mark {resource.type === "project" ? "project" : "course"} complete
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={pending}
+              onClick={async () => {
+                await skipResource(milestone, resource);
+                onClose();
+              }}
+            >
+              Skip
+            </Button>
+            <span className="ml-auto flex items-center gap-1">
+              <button
+                aria-label="This was helpful"
+                disabled={pending}
+                onClick={() => sendFeedback(resource, "up")}
+                className="grid h-8 w-8 place-items-center rounded-lg border border-border text-muted hover:border-success/40 hover:text-success disabled:opacity-50"
+              >
+                <IconThumb up />
+              </button>
+              <button
+                aria-label="Not helpful"
+                disabled={pending}
+                onClick={() => sendFeedback(resource, "down")}
+                className="grid h-8 w-8 place-items-center rounded-lg border border-border text-muted hover:border-danger/40 hover:text-danger disabled:opacity-50"
+              >
+                <IconThumb />
+              </button>
+            </span>
+          </div>
+        )}
+
         {/* footer */}
         <div className="flex items-center justify-between gap-2 border-t border-border p-4">
           <span className="text-xs text-muted">
@@ -207,6 +259,22 @@ function IconChartBars() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className={clsx("h-3.5 w-3.5")}>
       <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function IconThumb({ up }: { up?: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      className={clsx("h-4 w-4", !up && "rotate-180")}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M7 10v11M2 21h5V10H2zM7 10l4-8a2 2 0 0 1 3 2l-1 5h5a2 2 0 0 1 2 2.4l-1.5 7A2 2 0 0 1 20.5 21H7" />
     </svg>
   );
 }

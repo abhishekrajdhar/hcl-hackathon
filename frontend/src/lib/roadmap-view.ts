@@ -32,6 +32,8 @@ export function toRoadmapState(status: PathItemStatus | string): RoadmapState {
 
 export interface RoadmapResource {
   id: string;
+  /** Backend Resource UUID (for adaptive complete/skip); undefined in demo. */
+  resourceId?: string;
   title: string;
   /** Roadmap slot: resource | assessment | project | review. */
   kind: string;
@@ -71,6 +73,8 @@ export interface RoadmapMilestone {
   id: string;
   title: string;
   skill: string;
+  /** Backend skill slug (for adaptive assessment scores); undefined in demo. */
+  skillSlug?: string;
   state: RoadmapState;
   current: number; // 0..1
   required: number; // 0..1

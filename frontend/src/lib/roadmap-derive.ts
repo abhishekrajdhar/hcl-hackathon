@@ -62,6 +62,7 @@ export function buildRoadmapView(
     const res = rec?.resource;
     return {
       id: item.id,
+      resourceId: item.resource_id ?? undefined,
       title: item.title,
       kind: item.kind,
       type: res?.resource_type ?? item.kind,
@@ -86,6 +87,7 @@ export function buildRoadmapView(
         id: m.skill_id ?? m.skill_slug ?? m.title,
         title: m.title,
         skill: m.skill_slug ? titleCase(m.skill_slug) : m.title,
+        skillSlug: m.skill_slug ?? undefined,
         state,
         current: m.current_level,
         required: m.required_level,
