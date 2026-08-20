@@ -209,6 +209,58 @@ export interface ChatResponse {
   source: "llm" | "template";
 }
 
+export interface ChatMessageRead {
+  id: UUID;
+  role: string;
+  content: string;
+  meta: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface ConversationRead {
+  id: UUID;
+  title: string | null;
+  created_at: string;
+}
+
+export interface ConversationDetail extends ConversationRead {
+  messages: ChatMessageRead[];
+}
+
+// ---- Shapes of `ToolInvocation.data` per tool (see backend chat_tools.py) ----
+
+export interface ChatRecommendationDatum {
+  title: string | null;
+  score: number;
+  reason: string;
+}
+
+export interface ChatRoadmapPhaseDatum {
+  phase: string;
+  is_capstone: boolean;
+  milestones: string[];
+}
+
+export interface ChatSkillGapDatum {
+  skill: string;
+  current_level: number;
+  required_level: number;
+  gap: number;
+}
+
+export interface ChatSearchResultDatum {
+  title: string;
+  type: string;
+  similarity: number;
+}
+
+export interface ChatUpdatedSkillDatum {
+  skill: string;
+  previous: number;
+  new: number;
+  mastery: string;
+}
+
 export interface Paginated<T> {
   items: T[];
   total: number;

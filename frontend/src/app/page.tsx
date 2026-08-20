@@ -95,7 +95,15 @@ export default function DashboardPage() {
         </div>
 
         <div id="assistant" className="scroll-mt-6">
-          <Assistant />
+          <Assistant
+            resolveResourceUrl={(title) => {
+              const t = title.toLowerCase();
+              const hit = data.recommendations.find(
+                (r) => r.title.toLowerCase() === t || r.title.toLowerCase().includes(t) || t.includes(r.title.toLowerCase()),
+              );
+              return hit?.url ?? null;
+            }}
+          />
         </div>
 
         {loading && <p className="py-2 text-center text-xs text-muted">Refreshing your data…</p>}

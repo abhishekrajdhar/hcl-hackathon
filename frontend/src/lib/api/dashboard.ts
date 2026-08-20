@@ -1,5 +1,4 @@
 import type {
-  ChatResponse,
   FullLearnerProfile,
   LearningPathRoadmap,
   Paginated,
@@ -39,12 +38,5 @@ export function getRecommendations(
   return request<RecommendationResponse>("/recommendations", {
     method: "POST",
     body: { user_id: userId, goal_text: goalText, target_skills: targetSkills, top_k: 6 },
-  });
-}
-
-export function sendChat(message: string, conversationId?: UUID): Promise<ChatResponse> {
-  return request<ChatResponse>("/chat", {
-    method: "POST",
-    body: { message, conversation_id: conversationId },
   });
 }
