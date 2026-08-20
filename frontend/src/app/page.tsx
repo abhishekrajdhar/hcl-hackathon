@@ -5,6 +5,7 @@ import { Shell } from "@/components/dashboard/Shell";
 import { SignIn } from "@/components/dashboard/SignIn";
 import { Overview } from "@/components/dashboard/Overview";
 import { NextAction } from "@/components/dashboard/NextAction";
+import { Roadmap } from "@/components/dashboard/roadmap/Roadmap";
 import { LearningPath } from "@/components/dashboard/LearningPath";
 import { SkillProgress } from "@/components/dashboard/SkillProgress";
 import { Milestones } from "@/components/dashboard/Milestones";
@@ -66,6 +67,10 @@ export default function DashboardPage() {
         </div>
         <div id="next-action">
           <NextAction data={data} />
+        </div>
+
+        <div id="roadmap" className="scroll-mt-6">
+          <Roadmap data={data} />
         </div>
 
         <div className="grid gap-5 lg:grid-cols-3">

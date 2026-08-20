@@ -14,6 +14,8 @@ import type {
   ProgressSummary,
   RecommendationResponse,
 } from "@/lib/types";
+import { buildRoadmapView } from "@/lib/roadmap-derive";
+import { demoRoadmap } from "@/lib/roadmap-demo";
 
 export function masteryFromPct(p: number): string {
   if (p >= 0.9) return "strong_mastery";
@@ -174,14 +176,25 @@ export function buildDashboardData(input: {
   }
 
   const p = profile.profile;
+  const goal = p.goal_text_raw || p.target_role || "Your learning goal";
+  const role = p.target_role || "your goal";
+  const progressPct = Math.round(progress?.completion_pct ?? 0);
+
+  // Rich roadmap model — real when we have a path, else the demo so the
+  // roadmap interface stays meaningful.
+  const roadmapView = roadmap
+    ? buildRoadmapView(roadmap, recommendations, goal, role, progressPct)
+    : demoRoadmap;
+
   return {
-    goal: p.goal_text_raw || p.target_role || "Your learning goal",
-    role: p.target_role || "your goal",
-    progressPct: Math.round(progress?.completion_pct ?? 0),
+    goal,
+    role,
+    progressPct,
     weeklyHours: p.weekly_hours,
     skills,
     phases,
     milestones,
+    roadmap: roadmapView,
     currentMilestone: currentMilestone || milestones.find((m) => m.status === "in_progress")?.title || "—",
     nextAction,
     recommendations: recs,

@@ -8,6 +8,7 @@ import type {
   PhaseDatum,
   RecommendationDatum,
 } from "@/lib/dashboard-data";
+import { demoRoadmap } from "@/lib/roadmap-demo";
 
 const skills = [
   { name: "Python", slug: "python", current: 0.9, target: 0.9 },
@@ -73,6 +74,7 @@ export const demoData: DashboardData = {
   skills,
   phases,
   milestones,
+  roadmap: demoRoadmap,
   currentMilestone: "Deep Learning",
   nextAction: {
     title: "Complete PyTorch Fundamentals",

@@ -2,11 +2,12 @@
 
 import { clsx } from "@/lib/cn";
 import { Badge } from "@/components/ui/Badge";
-import { IconLogout, IconTarget, IconPath, IconChart, IconFlag, IconBook, IconClipboard, IconActivity, IconChat, IconSpark } from "@/components/ui/icons";
+import { IconLogout, IconTarget, IconPath, IconChart, IconFlag, IconBook, IconClipboard, IconActivity, IconChat, IconSpark, IconLayers } from "@/components/ui/icons";
 
 const NAV = [
   { id: "overview", label: "Overview", icon: IconTarget },
   { id: "next-action", label: "Next Action", icon: IconSpark },
+  { id: "roadmap", label: "Roadmap", icon: IconLayers },
   { id: "path", label: "Learning Path", icon: IconPath },
   { id: "skills", label: "Skill Progress", icon: IconChart },
   { id: "milestones", label: "Milestones", icon: IconFlag },

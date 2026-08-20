@@ -76,3 +76,10 @@ body {
 }
 .scroll-thin::-webkit-scrollbar { width: 8px; height: 8px; }
 .scroll-thin::-webkit-scrollbar-thumb { background: var(--border); border-radius: 8px; }
+
+@keyframes modal-in {
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.animate-in { animation: modal-in 0.18s ease-out; }
+@media (prefers-reduced-motion: reduce) { .animate-in { animation: none; } }

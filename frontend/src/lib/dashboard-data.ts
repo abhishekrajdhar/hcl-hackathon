@@ -2,6 +2,7 @@
 // responses in `derive.ts` (or the bundled demo). Components depend on this,
 // never on raw API schemas.
 import type { PathItemStatus } from "@/lib/types";
+import type { RoadmapView } from "@/lib/roadmap-view";
 
 export interface SkillDatum {
   name: string;
@@ -81,6 +82,8 @@ export interface DashboardData {
   skills: SkillDatum[];
   phases: PhaseDatum[];
   milestones: MilestoneDatum[];
+  /** Rich roadmap model for the personalized roadmap interface. */
+  roadmap: RoadmapView;
   currentMilestone: string;
   nextAction: NextActionDatum | null;
   recommendations: RecommendationDatum[];
