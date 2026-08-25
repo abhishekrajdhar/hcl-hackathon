@@ -46,3 +46,16 @@ class ProgressSummary(BaseModel):
     active_path_completed_items: int = 0
     completion_pct: float = 0.0
     last_activity_at: datetime | None = None
+
+    # --- pace: actual effort measured against the plan ----------------------
+    #: actual ÷ estimated minutes over completed items. 1.0 until measurable.
+    pace_ratio: float = 1.0
+    #: "faster" | "on_track" | "slower" | "unknown" (too few completed items).
+    pace_label: str = "unknown"
+    #: How many completed items the ratio is based on.
+    pace_sample_size: int = 0
+    #: Remaining planned effort, and the same re-estimated at this learner's pace.
+    remaining_estimated_minutes: int = 0
+    remaining_adjusted_minutes: int = 0
+    #: Weeks to finish at the profile's weekly hours; None without a budget.
+    projected_weeks_remaining: float | None = None

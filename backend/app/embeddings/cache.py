@@ -45,3 +45,17 @@ class EmbeddingCache:
 
     def clear(self) -> None:
         self._store.clear()
+
+    # --- async surface ---------------------------------------------------
+    # The local cache needs no awaiting, but callers use the async form so a
+    # shared tier (see `redis_cache.py`) can slot in without touching them.
+    async def aget(self, provider: str, dimension: int, text: str) -> list[float] | None:
+        return self.get(provider, dimension, text)
+
+    async def aput(
+        self, provider: str, dimension: int, text: str, vector: list[float]
+    ) -> None:
+        self.put(provider, dimension, text, vector)
+
+    async def aclose(self) -> None:
+        return None

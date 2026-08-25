@@ -20,6 +20,7 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.errors import AppError, ForbiddenError, NotFoundError
 from app.core.logging import get_logger
 from app.embeddings.base import EmbeddingProvider
@@ -62,6 +63,21 @@ SYSTEM_PROMPT = (
 )
 
 
+#: The general-knowledge prompt. Separate from SYSTEM_PROMPT on purpose: that
+#: one forbids adding facts, because it rephrases grounded application data.
+#: This one is allowed to teach, but is forbidden from saying anything about
+#: THIS learner — the assistant must never blur "what is true of the subject"
+#: with "what is true of you".
+GENERAL_QUESTION_PROMPT = (
+    "You are a learning coach answering a general question about a technical "
+    "subject. Answer directly, accurately and briefly — three or four sentences, "
+    "plain prose, no lists or headings, suitable for reading aloud.\n"
+    "CRITICAL: you know NOTHING about this particular learner. Never mention "
+    "their skills, scores, progress, roadmap or goal, and never imply you have "
+    "looked at their data. If you genuinely do not know, say so. You may "
+    "mention the catalogue resources supplied to you, if any are relevant."
+)
+
 class ChatService(BaseService):
     def __init__(
         self,
@@ -99,7 +115,10 @@ class ChatService(BaseService):
 
         results = await self._run_tools(user_id, intent)
         draft = compose_reply(intent, results)
-        reply, source = await self._maybe_rephrase(message, draft, results)
+        if intent.kind == IntentKind.GENERAL_QUESTION:
+            reply, source = await self._answer_general(message, draft, results)
+        else:
+            reply, source = await self._maybe_rephrase(message, draft, results)
 
         self.session.add(
             ConversationMessage(
@@ -154,6 +173,12 @@ class ChatService(BaseService):
             executor = ChatToolExecutor(self.session, user_id, self.embeddings)  # type: ignore[arg-type]
             if name == "search_resources":
                 results.append(await executor.search_resources(intent.query or intent.raw))
+            elif name == "explain_skill_relationship":
+                results.append(
+                    await executor.explain_skill_relationship(
+                        intent.skill_ref, intent.related_skill_ref
+                    )
+                )
             elif name == "update_learning_progress":
                 results.append(
                     await executor.update_learning_progress(
@@ -201,7 +226,10 @@ class ChatService(BaseService):
         for name in names[:_MAX_CLAIMED_SKILLS]:
             resolution = await resolver.resolve(name)
             if resolution.status != "matched" or resolution.skill is None:
-                logger.info("skill claim unresolved", claim=name, status=resolution.status)
+                logger.info(
+                    "skill claim unresolved",
+                    extra={"claim": name, "status": resolution.status},
+                )
                 continue
             try:
                 await service.get_skill(user_id, resolution.skill.id)
@@ -220,9 +248,54 @@ class ChatService(BaseService):
                     ),
                 )
             except AppError as exc:  # pragma: no cover - defensive
-                logger.info("skill claim not recorded", claim=name, error=str(exc))
+                logger.info(
+                    "skill claim not recorded",
+                    extra={"claim": name, "error": str(exc)[:200]},
+                )
 
     # --- optional LLM rephrase (grounded) --------------------------------
+    async def _answer_general(
+        self, message: str, draft: str, results: list[ToolResult]
+    ) -> tuple[str, str]:
+        """Answer a subject-matter question — the one place the model supplies facts.
+
+        This deliberately sits OUTSIDE the determinism boundary the rest of the
+        assistant keeps, and it is narrow on purpose. The question is not about
+        the learner (no learner tool ran), so there is nothing to ground
+        against; instead the prompt forbids any claim about this learner's
+        data, and the reply is tagged `llm_general` so the UI can label it as
+        general explanation rather than personal guidance.
+
+        With no model configured — the default — this returns the template,
+        which points at the catalogue instead of guessing.
+        """
+        if self.llm is None or settings.LLM_PROVIDER == "mock":
+            return draft, "template"
+
+        catalogue = next((r for r in results if r.name == "search_resources"), None)
+        titles = (
+            [r["title"] for r in catalogue.data.get("resources", [])[:3]]
+            if catalogue and catalogue.available
+            else []
+        )
+        try:
+            completion = await self.llm.complete(
+                system=GENERAL_QUESTION_PROMPT,
+                user=(
+                    f"Learner asked: {message}\n\n"
+                    f"Relevant catalogue resources you may mention: {titles or 'none'}"
+                ),
+                max_tokens=400,
+            )
+            text = completion.text.strip()
+        except LLMError as exc:
+            logger.warning("general answer failed; using template", extra={"error": str(exc)[:200]})
+            return draft, "template"
+
+        if not text or text.lstrip()[:1] in "{[":
+            return draft, "template"
+        return text, "llm_general"
+
     async def _maybe_rephrase(
         self, message: str, draft: str, results: list[ToolResult]
     ) -> tuple[str, str]:
@@ -261,6 +334,8 @@ class ChatService(BaseService):
 _TOOL_PLAN: dict[IntentKind, list[str]] = {
     IntentKind.GREETING: ["get_learner_profile"],
     IntentKind.SET_GOAL: ["get_learner_profile", "get_goal_prerequisites"],
+    IntentKind.EXPLAIN_PREREQUISITE: ["explain_skill_relationship"],
+    IntentKind.GENERAL_QUESTION: ["search_resources"],
     IntentKind.NEXT_ACTION: ["get_next_action"],
     IntentKind.WEEKLY_PLAN: ["get_current_learning_path", "get_progress"],
     IntentKind.EXPLAIN_RECOMMENDATION: ["get_recommendations"],

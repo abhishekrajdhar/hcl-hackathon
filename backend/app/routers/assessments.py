@@ -19,9 +19,11 @@ from app.schemas.assessment import (
     AssessmentResultRead,
     AssessmentSubmission,
     AssessmentUpdate,
+    PendingReview,
     QuestionAdminRead,
     QuestionCreate,
     QuestionUpdate,
+    ReviewResponseRequest,
 )
 from app.schemas.assessment_gen import (
     AssessmentSubmitReport,
@@ -34,6 +36,9 @@ from app.services.assessment_service import AssessmentService
 
 router = APIRouter(prefix="/assessments", tags=["assessments"])
 results_router = APIRouter(prefix="/me/assessment-results", tags=["assessments"])
+#: Reviewer queue. Separate prefix because it is admin-scoped and not the
+#: learner's own results.
+review_router = APIRouter(prefix="/assessment-reviews", tags=["assessments"])
 
 
 def _to_read(assessment, question_count: int | None = None) -> AssessmentRead:  # type: ignore[no-untyped-def]
@@ -226,4 +231,36 @@ async def get_my_result(
     result_id: uuid.UUID, session: SessionDep, current_user: CurrentUser
 ) -> AssessmentResultRead:
     result = await AssessmentService(session).get_result(result_id, current_user.id)
+    return AssessmentResultRead.model_validate(result)
+
+
+# --- short-answer review (admin) --------------------------------------------
+@review_router.get(
+    "",
+    response_model=Page[PendingReview],
+    summary="Short answers awaiting a human grade",
+)
+async def list_pending_reviews(
+    session: SessionDep, pagination: PaginationDep, _: AdminUser
+) -> Page[PendingReview]:
+    items, total = await AssessmentService(session).list_pending_reviews(
+        limit=pagination.limit, offset=pagination.offset
+    )
+    return Page(items=items, total=total, limit=pagination.limit, offset=pagination.offset)
+
+
+@review_router.post(
+    "/{result_id}",
+    response_model=AssessmentResultRead,
+    summary="Grade one short answer and re-score the attempt",
+)
+async def review_response(
+    result_id: uuid.UUID,
+    payload: ReviewResponseRequest,
+    session: SessionDep,
+    admin: AdminUser,
+) -> AssessmentResultRead:
+    result = await AssessmentService(session).review_response(
+        result_id, payload, reviewer_id=admin.id
+    )
     return AssessmentResultRead.model_validate(result)

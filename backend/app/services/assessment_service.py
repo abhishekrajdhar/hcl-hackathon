@@ -26,8 +26,10 @@ from app.schemas.assessment import (
     AssessmentCreate,
     AssessmentSubmission,
     AssessmentUpdate,
+    PendingReview,
     QuestionCreate,
     QuestionUpdate,
+    ReviewResponseRequest,
 )
 from app.services.base import BaseService
 
@@ -186,6 +188,9 @@ class AssessmentService(BaseService):
             is_correct = self._grade(question, answer.response)
             if is_correct:
                 score += question.points
+            # A short answer is not wrong — it is ungraded. Flagging it here is
+            # what makes it findable by a reviewer instead of quietly scoring 0.
+            needs_review = question.question_type == QuestionType.SHORT_ANSWER
             responses.append(
                 {
                     "question_id": str(question.id),
@@ -195,6 +200,10 @@ class AssessmentService(BaseService):
                     "points_awarded": question.points if is_correct else 0.0,
                     "points_possible": question.points,
                     "time_spent_ms": answer.time_spent_ms,
+                    "needs_review": needs_review,
+                    "prompt": question.stem,
+                    "reviewed_by": None,
+                    "reviewer_note": None,
                 }
             )
 
@@ -239,6 +248,86 @@ class AssessmentService(BaseService):
             return sorted(map(str, response)) == sorted(map(str, expected))
 
         return str(response) == str(expected)
+
+    # --- short-answer review ---------------------------------------------
+    async def list_pending_reviews(
+        self, *, limit: int, offset: int
+    ) -> tuple[list[PendingReview], int]:
+        """Every short answer still waiting on a human.
+
+        Grading refuses to auto-mark these, so without somewhere to see them
+        they simply sit at zero forever. This is that queue.
+        """
+        results = await self.results.list_with_pending_review(limit=limit, offset=offset)
+        total = await self.results.count_with_pending_review()
+        pending = [
+            PendingReview(
+                result_id=result.id,
+                assessment_id=result.assessment_id,
+                user_id=result.user_id,
+                submitted_at=result.submitted_at,
+                question_id=uuid.UUID(response["question_id"]),
+                prompt=response.get("prompt") or "",
+                response=response.get("response"),
+                points_possible=float(response.get("points_possible") or 0.0),
+            )
+            for result in results
+            for response in result.responses
+            if response.get("needs_review")
+        ]
+        return pending, total
+
+    async def review_response(
+        self,
+        result_id: uuid.UUID,
+        payload: ReviewResponseRequest,
+        *,
+        reviewer_id: uuid.UUID,
+    ) -> AssessmentResult:
+        """Mark one short answer correct or incorrect and re-score the attempt.
+
+        Re-scoring is a full recomputation from the responses, not an increment,
+        so reviewing the same answer twice cannot inflate a score — the same
+        rule the rest of the app follows for derived numbers.
+        """
+        result = await self.results.get(result_id)
+        if result is None:
+            raise NotFoundError("Assessment result", result_id)
+
+        target = str(payload.question_id)
+        responses = [dict(r) for r in result.responses]
+        match = next((r for r in responses if r.get("question_id") == target), None)
+        if match is None:
+            raise NotFoundError("Response for that question on this result", payload.question_id)
+        if not match.get("needs_review"):
+            raise ValidationError(
+                "That response is not awaiting review", error_code="not_reviewable"
+            )
+
+        match["is_correct"] = payload.is_correct
+        match["points_awarded"] = float(match.get("points_possible") or 0.0) if payload.is_correct else 0.0
+        match["needs_review"] = False
+        match["reviewed_by"] = str(reviewer_id)
+        match["reviewer_note"] = payload.note
+
+        score = sum(float(r.get("points_awarded") or 0.0) for r in responses)
+        max_score = sum(float(r.get("points_possible") or 0.0) for r in responses)
+        percentage = round(score / max_score * 100, 2) if max_score else 0.0
+        assessment = await self.assessments.get(result.assessment_id)
+        passing = assessment.passing_score if assessment else 0.0
+
+        updated = await self.results.update(
+            result,
+            {
+                "responses": responses,
+                "score": score,
+                "max_score": max_score,
+                "percentage": percentage,
+                "passed": percentage >= passing,
+            },
+        )
+        await self.commit()
+        return updated
 
     async def list_results(
         self, user_id: uuid.UUID, *, limit: int, offset: int

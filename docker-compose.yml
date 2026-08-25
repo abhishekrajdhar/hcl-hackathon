@@ -48,6 +48,8 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       REDIS_URL: redis://redis:6379/0
+      # Redis now backs the shared query-embedding cache.
+      EMBEDDING_CACHE_BACKEND: redis
     ports:
       - "${API_PORT:-8000}:8000"
     depends_on:

@@ -30,6 +30,8 @@ from app.embeddings.cache import EmbeddingCache
 from app.embeddings.text import canonical_goal_query_text
 from app.engines.recommendation import (
     CandidateResource,
+    CatalogueEntry,
+    DeclaredCourse,
     LearnerContext,
     RecommendationWeights,
     ResourcePrerequisite,
@@ -46,7 +48,9 @@ from app.models.enums import (
 from app.models.feedback import Feedback
 from app.models.recommendation import Recommendation
 from app.models.resource import Resource
+from app.engines.recommendation import build_suppressions, match_declared_courses
 from app.repositories.feedback import FeedbackRepository
+from app.repositories.progress import UserProgressRepository
 from app.repositories.recommendation import RecommendationRepository
 from app.repositories.resource import ResourceRepository
 from app.repositories.skill import SkillRepository
@@ -61,6 +65,18 @@ from app.schemas.skill_gap import RequiredSkillInput, SkillGapAnalyzeRequest, Sk
 from app.services.base import BaseService
 from app.services.embedding_service import EmbeddingService
 from app.services.skill_gap_service import SkillGapService
+
+def _as_uuid(value: object) -> uuid.UUID | None:
+    """Profile JSON is free-form; a malformed id must not break ranking."""
+    if isinstance(value, uuid.UUID):
+        return value
+    if isinstance(value, str):
+        try:
+            return uuid.UUID(value)
+        except ValueError:
+            return None
+    return None
+
 
 _FEEDBACK_VALUE = {
     FeedbackSignal.LOVED: 1.0,
@@ -97,6 +113,7 @@ class RecommendationEngineService(BaseService):
         self.resources = ResourceRepository(session)
         self.skills = SkillRepository(session)
         self.profiles = LearnerProfileRepository(session)
+        self.progress = UserProgressRepository(session)
         self.feedback = FeedbackRepository(session)
         self.recommendations = RecommendationRepository(session)
         self.weights = weights or RecommendationWeights()
@@ -142,8 +159,14 @@ class RecommendationEngineService(BaseService):
             for resource, similarity in candidates
         ]
 
+        # Prior learning is applied AFTER scoring and before ranking, so the
+        # excluded count is reported rather than silently shrinking the pool.
+        suppressed = await self._already_learned(learner_id, [rc.resource for rc in scored])
+        fresh = [rc for rc in scored if rc.resource.id not in suppressed]
+        already_learned = len(scored) - len(fresh)
+
         ranked, excluded = self.rank_resources(
-            scored, top_k=request.top_k, include_unready=request.include_unready
+            fresh, top_k=request.top_k, include_unready=request.include_unready
         )
         items = [self._to_item(rc, rank=index + 1) for index, rc in enumerate(ranked)]
 
@@ -155,6 +178,7 @@ class RecommendationEngineService(BaseService):
             goal_id=request.goal_id,
             count=len(items),
             excluded_unready=excluded,
+            excluded_already_learned=already_learned,
             weights=self._weights_dict(),
             recommendations=items,
         )
@@ -290,6 +314,40 @@ class RecommendationEngineService(BaseService):
             estimated_hours=resource.estimated_hours,
             historical_success=provider_success.get(resource.provider),
         )
+
+    async def _already_learned(
+        self, user_id: uuid.UUID, candidates: list[Resource]
+    ) -> dict[uuid.UUID, str]:
+        """Resources this learner has already done, from both histories.
+
+        Recommending something the learner finished last week is the most
+        obvious way for a recommender to look like it is not paying attention,
+        so both the recorded event log and the profile's declared courses are
+        consulted. Declared courses only suppress on an unambiguous match — see
+        `engines/recommendation/history.py`.
+        """
+        completed = await self.progress.completed_resource_ids(user_id)
+
+        profile = await self.profiles.get_by_user(user_id)
+        declared_raw = list(profile.completed_courses or []) if profile else []
+        declared = [
+            DeclaredCourse(
+                title=str(entry.get("title") or ""),
+                provider=entry.get("provider"),
+                url=entry.get("url"),
+                resource_id=_as_uuid(entry.get("resource_id")),
+            )
+            for entry in declared_raw
+            if isinstance(entry, dict)
+        ]
+        catalogue = [
+            CatalogueEntry(
+                resource_id=r.id, title=r.title, provider=r.provider, url=r.url
+            )
+            for r in candidates
+        ]
+        matches = match_declared_courses(declared, catalogue) if declared else {}
+        return build_suppressions(completed, matches)
 
     async def _provider_success(self, user_id: uuid.UUID) -> dict[str, float]:
         """Per-provider success prior from the learner's own resource feedback.

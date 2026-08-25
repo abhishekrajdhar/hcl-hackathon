@@ -101,5 +101,7 @@ class RecommendationResponse(BaseModel):
     count: int
     #: How many candidates were gated out as not-yet-appropriate.
     excluded_unready: int = 0
+    #: How many were dropped because the learner has already done them.
+    excluded_already_learned: int = 0
     weights: dict[str, float] = Field(default_factory=dict)
     recommendations: list[RecommendationItem] = Field(default_factory=list)

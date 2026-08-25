@@ -62,3 +62,25 @@ class AssessmentResultRepository(BaseRepository[AssessmentResult]):
             .offset(offset)
         )
         return list((await self.session.execute(stmt)).scalars().all())
+
+    # --- short-answer review queue ---------------------------------------
+    #: Postgres JSONB containment: at least one response still flagged for
+    #: review. Indexable and evaluated in the database rather than by loading
+    #: every result and filtering in Python.
+    _PENDING = AssessmentResult.responses.contains([{"needs_review": True}])
+
+    async def list_with_pending_review(
+        self, *, limit: int, offset: int
+    ) -> list[AssessmentResult]:
+        stmt = (
+            select(AssessmentResult)
+            .where(self._PENDING)
+            .order_by(AssessmentResult.submitted_at.asc().nullslast())
+            .limit(limit)
+            .offset(offset)
+        )
+        return list((await self.session.execute(stmt)).scalars().unique().all())
+
+    async def count_with_pending_review(self) -> int:
+        stmt = select(func.count(AssessmentResult.id)).where(self._PENDING)
+        return int((await self.session.execute(stmt)).scalar_one())

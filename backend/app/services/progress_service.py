@@ -6,11 +6,18 @@ from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import NotFoundError, ValidationError
+from app.engines.progress import (
+    CompletedEffort,
+    adjusted_remaining_minutes,
+    compute_pace,
+    weeks_remaining,
+)
 from app.models.enums import PathItemStatus, ProgressEventType
 from app.models.progress import UserProgress
 from app.repositories.path import LearningPathItemRepository, LearningPathRepository
 from app.repositories.progress import UserProgressRepository
 from app.repositories.resource import ResourceRepository
+from app.repositories.user import LearnerProfileRepository
 from app.schemas.progress import ProgressEventCreate, ProgressSummary
 from app.services.base import BaseService
 
@@ -24,6 +31,7 @@ class ProgressService(BaseService):
         self.items = LearningPathItemRepository(session)
         self.paths = LearningPathRepository(session)
         self.resources = ResourceRepository(session)
+        self.profiles = LearnerProfileRepository(session)
 
     async def record(self, user_id: uuid.UUID, payload: ProgressEventCreate) -> UserProgress:
         if payload.path_item_id is None and payload.resource_id is None:
@@ -81,6 +89,8 @@ class ProgressService(BaseService):
         total_items = 0
         completed_items = 0
         completion_pct = 0.0
+        pace = compute_pace([])
+        remaining_estimated = 0
         if active_path is not None:
             path_items = await self.items.list_for_path(active_path.id)
             total_items = len(path_items)
@@ -88,6 +98,27 @@ class ProgressService(BaseService):
             completed_items = len(completed_ids)
             if total_items:
                 completion_pct = round(completed_items / total_items * 100, 2)
+
+            # Pace: what the plan said each finished item would cost, against
+            # what it actually cost.
+            actual = await self.events.minutes_per_completed_item(user_id, active_path.id)
+            pace = compute_pace([
+                CompletedEffort(
+                    estimated_minutes=item.estimated_minutes,
+                    actual_minutes=actual.get(item.id, 0),
+                )
+                for item in path_items
+                if item.id in completed_ids
+            ])
+            remaining_estimated = sum(
+                item.estimated_minutes for item in path_items if item.id not in completed_ids
+            )
+
+        profile = await self.profiles.get_by_user(user_id)
+        remaining_adjusted = adjusted_remaining_minutes(remaining_estimated, pace)
+        projected_weeks = weeks_remaining(
+            remaining_adjusted, profile.weekly_hours if profile else None
+        )
 
         return ProgressSummary(
             user_id=user_id,
@@ -100,4 +131,10 @@ class ProgressService(BaseService):
             active_path_completed_items=completed_items,
             completion_pct=completion_pct,
             last_activity_at=aggregate["last_activity_at"],  # type: ignore[arg-type]
+            pace_ratio=pace.ratio,
+            pace_label=pace.label,
+            pace_sample_size=pace.sample_size,
+            remaining_estimated_minutes=remaining_estimated,
+            remaining_adjusted_minutes=remaining_adjusted,
+            projected_weeks_remaining=projected_weeks,
         )

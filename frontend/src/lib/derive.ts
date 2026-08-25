@@ -150,10 +150,10 @@ export function buildDashboardData(input: {
   const assessments = (profile.assessment_history.recent ?? []).map((a) => ({
     id: a.id,
     title: `Assessment ${a.assessment_id.slice(0, 8)}`,
-    percentage: a.percentage,
+    percentage: toFraction(a.percentage),
     passed: a.passed,
     submittedAt: a.submitted_at,
-    mastery: masteryFromPct(a.percentage),
+    mastery: masteryFromPct(toFraction(a.percentage)),
   }));
 
   // activity: sum COMPLETED/PROGRESSED minutes per day over the last 14 days.
@@ -200,15 +200,27 @@ export function buildDashboardData(input: {
     recommendations: recs,
     assessments,
     activity,
+    pace: {
+      label: progress?.pace_label ?? "unknown",
+      ratio: progress?.pace_ratio ?? 1,
+      sampleSize: progress?.pace_sample_size ?? 0,
+      weeksRemaining: progress?.projected_weeks_remaining ?? null,
+    },
     stats: {
       skillsTracked: profile.skill_count,
       itemsCompleted: progress?.active_path_completed_items ?? 0,
       itemsTotal: progress?.active_path_total_items ?? 0,
       hoursSpent: Math.round((progress?.total_time_minutes ?? 0) / 60),
       totalPlannedHours: Math.round((roadmap?.total_estimated_minutes ?? 0) / 60),
-      avgAssessment: profile.assessment_history.average_percentage ?? 0,
+      avgAssessment: toFraction(profile.assessment_history.average_percentage ?? 0),
     },
     isDemo: false,
   };
 }
 
+/** Assessment percentages come back on a 0-100 scale; `DashboardData` and the
+ *  `pct()` formatter are both on 0-1. Normalising here, at the boundary, keeps
+ *  every consumer on one scale — without it a 100% result renders as "10000%". */
+function toFraction(percentage: number): number {
+  return percentage > 1 ? percentage / 100 : percentage;
+}

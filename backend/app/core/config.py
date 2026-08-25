@@ -69,6 +69,10 @@ class Settings(BaseSettings):
     EMBEDDING_BATCH_SIZE: int = 64
     #: Bounded in-process cache of query-text -> embedding (repeated searches).
     EMBEDDING_QUERY_CACHE_SIZE: int = 512
+    #: "memory" keeps the cache per-process; "redis" adds a shared tier above it
+    #: (requires REDIS_URL). An unreachable Redis degrades to memory.
+    EMBEDDING_CACHE_BACKEND: Literal["memory", "redis"] = "memory"
+    EMBEDDING_CACHE_TTL_SECONDS: int = 86_400
 
     # --- LLM -------------------------------------------------------------
     # Provider is chosen here, never hard-coded in application code. Credentials

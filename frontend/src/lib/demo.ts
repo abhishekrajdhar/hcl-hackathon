@@ -86,6 +86,7 @@ export const demoData: DashboardData = {
   recommendations,
   assessments,
   activity,
+  pace: { label: "slower", ratio: 1.3, sampleSize: 5, weeksRemaining: 14.2 },
   stats: {
     skillsTracked: skills.length,
     itemsCompleted: 11,

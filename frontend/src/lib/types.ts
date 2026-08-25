@@ -184,6 +184,15 @@ export interface ProgressSummary {
   active_path_completed_items: number;
   completion_pct: number;
   last_activity_at: string | null;
+  /** Actual ÷ estimated effort over completed items; 1.0 until measurable. */
+  pace_ratio: number;
+  pace_label: "faster" | "on_track" | "slower" | "unknown";
+  pace_sample_size: number;
+  remaining_estimated_minutes: number;
+  /** The remainder re-estimated at this learner's own tempo. */
+  remaining_adjusted_minutes: number;
+  /** Weeks to finish at the profile's weekly hours; null without a budget. */
+  projected_weeks_remaining: number | null;
 }
 
 export interface ProgressEvent {

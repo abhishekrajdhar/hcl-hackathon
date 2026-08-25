@@ -46,7 +46,7 @@ export function Overview({ data }: { data: DashboardData }) {
           <Stat
             label="Time invested"
             value={`${data.stats.hoursSpent}h`}
-            hint={`of ~${data.stats.totalPlannedHours}h planned`}
+            hint={paceHint(data)}
             icon={<IconClock className="h-4 w-4" />}
           />
           <Stat
@@ -59,4 +59,18 @@ export function Overview({ data }: { data: DashboardData }) {
       </div>
     </Card>
   );
+}
+
+/** How the learner's real tempo compares with the plan, and what it forecasts.
+ *
+ *  Falls back to the plain planned total until enough items are finished for
+ *  the ratio to mean anything — a forecast from one data point is a guess. */
+function paceHint(data: DashboardData): string {
+  const { label, ratio, weeksRemaining } = data.pace;
+  if (label === "unknown") return `of ~${data.stats.totalPlannedHours}h planned`;
+  const tempo =
+    label === "on_track"
+      ? "on plan"
+      : `${ratio.toFixed(1)}× ${label === "slower" ? "slower" : "faster"} than planned`;
+  return weeksRemaining != null ? `${tempo} · ~${weeksRemaining}w left` : tempo;
 }

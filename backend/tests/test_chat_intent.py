@@ -129,3 +129,46 @@ def test_extras_are_absent_when_unstated() -> None:
     intent = detect_intent("what should I learn next?")
     assert intent.weekly_hours is None
     assert intent.known_skills == []
+
+
+# --- subject-matter questions ------------------------------------------------
+# Previously every message starting with "why" was answered as if it were about
+# a recommendation, and open questions fell to a capability menu.
+
+
+@pytest.mark.parametrize(
+    ("text", "skill", "related"),
+    [
+        ("Why is linear algebra important for machine learning?", "linear algebra", "machine learning"),
+        ("Do I really need calculus for deep learning?", "calculus", "deep learning"),
+        ("How does statistics relate to machine learning?", "statistics", "machine learning"),
+        # skill_ref keeps the learner's own capitalisation; the resolver is
+        # case-insensitive, so nothing downstream cares.
+        ("Why do I need SQL for machine learning?", "SQL", "machine learning"),
+    ],
+)
+def test_prerequisite_questions_route_to_the_graph(
+    text: str, skill: str, related: str
+) -> None:
+    intent = detect_intent(text)
+    assert intent.kind is IntentKind.EXPLAIN_PREREQUISITE
+    assert intent.skill_ref == skill
+    assert intent.related_skill_ref == related
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "What is the difference between CNNs and transformers?",
+        "Should I learn PyTorch or TensorFlow?",
+        "Explain gradient descent",
+        "What are embeddings?",
+    ],
+)
+def test_open_subject_questions_are_recognised(text: str) -> None:
+    assert detect_intent(text).kind is IntentKind.GENERAL_QUESTION
+
+
+def test_recommendation_why_still_routes_to_recommendations() -> None:
+    intent = detect_intent("Why are you recommending PyTorch?")
+    assert intent.kind is IntentKind.EXPLAIN_RECOMMENDATION

@@ -44,5 +44,18 @@ def get_embedding_provider() -> EmbeddingProvider:
 
 @functools.lru_cache
 def get_embedding_cache() -> EmbeddingCache:
-    """Process-wide query-embedding cache."""
+    """Query-embedding cache: Redis-backed when configured, else in-process.
+
+    Chosen from settings like every other provider in the app. The Redis
+    variant is a subclass, so callers see one type either way and an
+    unreachable Redis silently degrades to the local tier.
+    """
+    if settings.REDIS_URL and settings.EMBEDDING_CACHE_BACKEND == "redis":
+        from app.embeddings.redis_cache import RedisEmbeddingCache
+
+        return RedisEmbeddingCache(
+            settings.REDIS_URL,
+            max_size=settings.EMBEDDING_QUERY_CACHE_SIZE,
+            ttl_seconds=settings.EMBEDDING_CACHE_TTL_SECONDS,
+        )
     return EmbeddingCache(max_size=settings.EMBEDDING_QUERY_CACHE_SIZE)

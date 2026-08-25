@@ -139,13 +139,13 @@ class EmbeddingService(BaseService):
 
     # --- query embedding (cached) ----------------------------------------
     async def embed_query(self, text: str) -> list[float]:
-        """Embed a search query, served from the in-process cache when possible."""
+        """Embed a search query, served from cache (local, then Redis) when possible."""
         cleaned = " ".join(text.split())
         if self.cache is not None:
-            cached = self.cache.get(self.provider.name, self.provider.dimension, cleaned)
+            cached = await self.cache.aget(self.provider.name, self.provider.dimension, cleaned)
             if cached is not None:
                 return cached
         vector = await self.provider.embed_text(cleaned)
         if self.cache is not None:
-            self.cache.put(self.provider.name, self.provider.dimension, cleaned, vector)
+            await self.cache.aput(self.provider.name, self.provider.dimension, cleaned, vector)
         return vector

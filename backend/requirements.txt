@@ -16,6 +16,11 @@ alembic==1.14.0
 pgvector==0.3.6
 greenlet==3.1.1
 
+# --- Cache -----------------------------------------------------------------
+# Optional at runtime: EMBEDDING_CACHE_BACKEND=memory needs none of this, and
+# the Redis cache degrades to in-process if the server is unreachable.
+redis==5.2.1
+
 # --- Security --------------------------------------------------------------
 PyJWT==2.10.1
 bcrypt==4.2.1

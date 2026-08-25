@@ -89,6 +89,13 @@ export interface DashboardData {
   recommendations: RecommendationDatum[];
   assessments: AssessmentDatum[];
   activity: ActivityDatum[];
+  /** Actual-vs-estimated tempo and the forecast it implies. */
+  pace: {
+    label: "faster" | "on_track" | "slower" | "unknown";
+    ratio: number;
+    sampleSize: number;
+    weeksRemaining: number | null;
+  };
   stats: {
     skillsTracked: number;
     itemsCompleted: number;

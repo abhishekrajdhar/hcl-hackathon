@@ -18,6 +18,8 @@ class IntentKind(str, Enum):
     REPORT_SCORE = "report_score"
     REPORT_COMPLETION = "report_completion"
     EXPLAIN_RECOMMENDATION = "explain_recommendation"
+    EXPLAIN_PREREQUISITE = "explain_prerequisite"
+    GENERAL_QUESTION = "general_question"
     CAN_I_SKIP = "can_i_skip"
     NEXT_ACTION = "next_action"
     WEEKLY_PLAN = "weekly_plan"
@@ -36,6 +38,8 @@ class Intent:
     kind: IntentKind
     goal_text: str | None = None
     skill_ref: str | None = None
+    #: The second skill in a relationship question ("X ... for Y").
+    related_skill_ref: str | None = None
     resource_ref: str | None = None
     score: float | None = None
     query: str | None = None
@@ -68,6 +72,40 @@ _WHY_RE = re.compile(
     r"(?:the\s+)?(?P<res>[a-z0-9 /+\-]{2,60})",
     re.IGNORECASE,
 )
+# --- "why do I need X (for Y)?" ----------------------------------------------
+# Matched BEFORE the generic "why ..." branch, which otherwise swallows every
+# question starting with the word and answers it as if it were about a
+# recommendation. These are answerable straight from the prerequisite graph.
+_PREREQ_WHY_RE = re.compile(
+    r"why\s+(?:is|are|do i need|does)\s+(?P<skill>[a-z0-9 /+\-]{2,60}?)\s+"
+    r"(?:important|necessary|required|needed|matter|useful|relevant)?\s*"
+    r"(?:for|to|in|before)\s+(?P<related>[a-z0-9 /+\-]{2,60})",
+    re.IGNORECASE,
+)
+_PREREQ_NEED_RE = re.compile(
+    r"(?:do|will)\s+i\s+(?:really\s+)?need\s+(?P<skill>[a-z0-9 /+\-]{2,60}?)"
+    r"(?:\s+(?:for|to|before)\s+(?P<related>[a-z0-9 /+\-]{2,60}))?(?:\.|,|;|!|\?|$)",
+    re.IGNORECASE,
+)
+_PREREQ_RELATE_RE = re.compile(
+    r"how\s+(?:does|do|is|are)\s+(?P<skill>[a-z0-9 /+\-]{2,60}?)\s+"
+    r"(?:relate|related|connected|connect|lead)\s+to\s+(?P<related>[a-z0-9 /+\-]{2,60})",
+    re.IGNORECASE,
+)
+
+# --- open subject-matter questions -------------------------------------------
+# Not about the learner's own data at all — "what is X", "X vs Y", "explain X".
+# Routed to a general-knowledge answer rather than a capability menu.
+_GENERAL_Q_RE = re.compile(
+    r"^\s*(?:what(?:'|\u2019)?s|what is|what are|explain|tell me about|difference between|"
+    r"how does|how do|when should i use|which is better)\b",
+    re.IGNORECASE,
+)
+_VERSUS_RE = re.compile(
+    r"\b(?P<a>[a-z0-9+.#\-]{2,30})\s+(?:vs\.?|versus|or)\s+(?P<b>[a-z0-9+.#\-]{2,30})\s*\??\s*$",
+    re.IGNORECASE,
+)
+
 _SKIP_RE = re.compile(
     r"(?:can i|should i|do i (?:have to|need to))\s+skip\s+(?:the\s+)?(?P<skill>[a-z0-9 /+\-]{2,60})",
     re.IGNORECASE,
@@ -212,7 +250,20 @@ def _classify(message: str) -> Intent:
         return Intent(IntentKind.SET_GOAL, goal_text=_clean(gm.group("goal")), raw=text,
                       matched=["goal"])
 
-    # 4) why this recommendation
+    # 4a) why do I need X (for Y)? — answerable from the prerequisite graph
+    for pattern in (_PREREQ_WHY_RE, _PREREQ_NEED_RE, _PREREQ_RELATE_RE):
+        pm = pattern.search(text)
+        if pm:
+            groups = pm.groupdict()
+            return Intent(
+                IntentKind.EXPLAIN_PREREQUISITE,
+                skill_ref=_clean(groups.get("skill")),
+                related_skill_ref=_clean(groups.get("related")),
+                raw=text,
+                matched=["prerequisite_why"],
+            )
+
+    # 4b) why this recommendation
     if low.startswith("why") or "why are you recommend" in low or "why recommend" in low:
         wm = _WHY_RE.search(text)
         return Intent(IntentKind.EXPLAIN_RECOMMENDATION,
@@ -253,6 +304,13 @@ def _classify(message: str) -> Intent:
 
     if _GREETING_RE.match(text):
         return Intent(IntentKind.GREETING, raw=text, matched=["greeting"])
+
+    # 12) an open question about the subject rather than about the learner
+    if _GENERAL_Q_RE.search(text) or _VERSUS_RE.search(text) or low.rstrip("?").endswith(
+        ("difference", "better")
+    ):
+        return Intent(IntentKind.GENERAL_QUESTION, query=_clean(text), raw=text,
+                      matched=["general_question"])
 
     return Intent(IntentKind.UNKNOWN, raw=text)
 

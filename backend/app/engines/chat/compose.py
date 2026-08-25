@@ -37,6 +37,29 @@ def compose_reply(intent: Intent, results: list[ToolResult]) -> str:
         goal = intent.goal_text or (profile.data.get("target_role") if profile else None)
         return _compose_goal_reply(intent, goal, tools.get("get_goal_prerequisites"))
 
+    if intent.kind == IntentKind.EXPLAIN_PREREQUISITE:
+        rel = tools.get("explain_skill_relationship")
+        if not (rel and rel.available):
+            return rel.summary if rel else "I don't know that skill."
+        return _compose_prerequisite_reply(rel)
+
+    if intent.kind == IntentKind.GENERAL_QUESTION:
+        # Answered by the LLM in the service when one is configured. This is
+        # the fallback for the mock provider: point at the catalogue rather
+        # than pretend to know.
+        search = tools.get("search_resources")
+        if search and search.available and search.data.get("resources"):
+            titles = ", ".join(r["title"] for r in search.data["resources"][:3])
+            return (
+                "That's a general question rather than one about your path, and I don't "
+                f"have a model configured to answer it. The closest material I have is: {titles}."
+            )
+        return (
+            "That's a general question rather than one about your path, and I don't have a "
+            "model configured to answer it. I can explain how skills depend on each other "
+            "though — try \"why do I need linear algebra for machine learning?\""
+        )
+
     if intent.kind == IntentKind.NEXT_ACTION:
         return _relay(tools.get("get_next_action"),
                       unavailable="You don't have an active learning path yet. "
@@ -150,6 +173,42 @@ def compose_reply(intent: Intent, results: list[ToolResult]) -> str:
         "explain recommendations, search for resources, and record what you've completed. "
         "What would you like to do?"
     )
+
+
+
+
+def _compose_prerequisite_reply(rel: ToolResult) -> str:
+    """Explain a dependency straight from the graph — no opinion involved."""
+    data = rel.data
+    skill = data.get("skill", "that skill")
+    target = data.get("target")
+
+    if not target:
+        unlocks = data.get("unlocks", [])
+        if not unlocks:
+            return f"Nothing in the catalogue lists {skill} as a prerequisite."
+        return (
+            f"{skill} is a prerequisite for {_join(unlocks[:4])}"
+            f"{f' and {len(unlocks) - 4} more' if len(unlocks) > 4 else ''}."
+        )
+
+    relation = data.get("relation")
+    if relation == "same":
+        return f"{skill} and {target} are the same skill."
+    if relation == "direct":
+        return (
+            f"{skill} is a direct prerequisite of {target} — the graph gates {target} "
+            f"behind it, so it comes first on any route to {target}."
+        )
+    if relation == "transitive":
+        chain = data.get("chain") or [skill, target]
+        return (
+            f"{skill} is an indirect prerequisite of {target}: {' → '.join(chain)}. "
+            f"It is not required immediately, but {target} is unreachable without it."
+        )
+    direct = data.get("target_direct_prerequisites", [])
+    tail = f" {target} depends on {_join(direct[:3])} instead." if direct else ""
+    return f"{skill} is not a prerequisite of {target}.{tail}"
 
 
 def _compose_goal_reply(

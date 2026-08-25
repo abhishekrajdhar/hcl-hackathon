@@ -54,8 +54,8 @@ proficiency via an evidence-weighted blend and can trigger a path regeneration.
 ## Stack
 
 **Backend** — FastAPI · Pydantic v2 · SQLAlchemy 2.0 (async, asyncpg) ·
-PostgreSQL 16 + pgvector · Alembic · Redis (provisioned, unused until the
-caching phase) · Docker Compose
+PostgreSQL 16 + pgvector · Alembic · Redis (shared query-embedding cache) ·
+Docker Compose
 
 **Frontend** — Next.js 15 (App Router) · React 19 · TypeScript · Tailwind ·
 Recharts · Three.js (react-three-fiber) for the Learning Universe
@@ -265,6 +265,7 @@ The nine tools available to it:
 | `search_resources` | Catalogue search for a query |
 | `update_learning_progress` | Record a completion or score, adapt the path |
 | `get_goal_prerequisites` | What the goal rests on, split into met and unknown |
+| `explain_skill_relationship` | How one skill depends on another in the graph |
 
 ## Talking to it
 
@@ -327,7 +328,8 @@ ever opened.
 │   │   ├── engines/             # pure decision logic
 │   │   │   ├── skill_graph/     # DAG algorithms
 │   │   │   ├── skill_gap/       # gap analysis + ordering
-│   │   │   ├── recommendation/  # hybrid scoring + readiness gate
+│   │   │   ├── recommendation/  # hybrid scoring, readiness gate, prior learning
+│   │   │   ├── progress/        # learning-pace model
 │   │   │   ├── path/            # roadmap generator
 │   │   │   ├── adaptive/        # threshold bands, proficiency update
 │   │   │   ├── assessment/      # mastery, question bank
@@ -405,6 +407,7 @@ All under `/api/v1`; health probes sit outside the prefix.
 | Paths (CRUD) | `GET/POST /learning-paths`, `GET /learning-paths/active`, `GET/PATCH/DELETE /learning-paths/{id}`, `GET/POST /learning-paths/{id}/items`, `PATCH/DELETE /learning-paths/{id}/items/{item_id}` |
 | Assessments | `GET/POST /assessments`, `POST /assessments/generate`, `GET/PATCH/DELETE /assessments/{id}`, `GET/POST /assessments/{id}/questions`, `PATCH/DELETE /assessments/{id}/questions/{qid}`, `POST /assessments/{id}/submit`, `GET /assessments/{id}/results` |
 | Results | `GET /me/assessment-results`, `GET /me/assessment-results/{id}` |
+| Review (admin) | `GET /assessment-reviews`, `POST /assessment-reviews/{result_id}` |
 | Adaptive | `POST /adaptive/update` |
 | Progress | `POST/GET /progress/events`, `GET /progress/summary` |
 | Feedback | `GET/POST /feedback`, `GET/PATCH/DELETE /feedback/{id}` |
@@ -462,8 +465,27 @@ converts API responses into the dashboard view model, and the demo dataset
 matches that shape exactly — so demo and live mode exercise identical rendering
 code.
 
-## Not built yet
+## Known limits
 
-Redis is provisioned and wired into compose but nothing reads it; response and
-embedding caching is the open item. Beyond that: reviewer tooling for
-short-answer grading, and feedback signals feeding back into ranking weights.
+Everything in the original brief is implemented. What remains is scope, not
+absence:
+
+**General questions need a configured model.** Prerequisite questions ("why do
+I need linear algebra for machine learning?") are answered deterministically
+from the graph and always work. Open subject-matter questions ("CNNs vs
+transformers?") are routed to `_answer_general`, which is the one place the
+model supplies facts rather than prose — with `LLM_PROVIDER=mock` it declines
+and points at the catalogue instead of guessing.
+
+**Reviewer grading does not re-run the adaptive engine.** Marking a short
+answer correct re-scores the attempt, but does not replay the proficiency
+update or milestone unlock that the original submission triggered.
+
+**Declared courses only suppress on an exact match** — an explicit
+`resource_id`, an equal URL, or an unambiguous title. Fuzzy matching is
+deliberately absent: hiding a resource the learner never took is a worse
+failure than showing one they did.
+
+**Feedback reaches ranking per-provider only.** `_provider_success` turns the
+learner's own resource feedback into a prior feeding the `historical_success`
+feature; it is not per-resource, per-modality or per-topic.

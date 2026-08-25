@@ -115,3 +115,23 @@ class AssessmentResultRead(TimestampedModel):
     theta_estimate: float | None = None
     duration_seconds: int | None = None
     responses: list[dict[str, Any]] = Field(default_factory=list)
+
+
+# --- short-answer review ----------------------------------------------------
+class PendingReview(BaseModel):
+    """One short answer awaiting a human decision."""
+
+    result_id: uuid.UUID
+    assessment_id: uuid.UUID
+    user_id: uuid.UUID
+    submitted_at: datetime | None = None
+    question_id: uuid.UUID
+    prompt: str
+    response: Any = None
+    points_possible: float = 0.0
+
+
+class ReviewResponseRequest(BaseModel):
+    question_id: uuid.UUID
+    is_correct: bool
+    note: str | None = Field(default=None, max_length=2000)

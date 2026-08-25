@@ -40,6 +40,7 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
     "search_resources": "Search the catalogue for resources relevant to a query.",
     "update_learning_progress": "Record a completed resource or an assessment score and adapt the path.",
     "get_goal_prerequisites": "Direct prerequisites of the learner's goal skill, split into met and unknown.",
+    "explain_skill_relationship": "How one skill depends on another in the prerequisite graph.",
 }
 
 
@@ -236,6 +237,92 @@ class ChatToolExecutor:
                           "Tell me what you completed or the score you got.")
 
     # --- helpers ---------------------------------------------------------
+    # --- 10 --------------------------------------------------------------
+    async def explain_skill_relationship(
+        self, skill_ref: str | None, related_ref: str | None
+    ) -> ToolResult:
+        """Answer "why do I need X for Y?" from the prerequisite DAG.
+
+        The graph already knows whether X gates Y and by what route, so this is
+        a lookup rather than a matter of opinion. When only X is named, the
+        answer is what X itself unlocks. An unresolvable name yields
+        `available=False` — the assistant says it does not know that skill
+        rather than reasoning about a skill the catalogue never had.
+        """
+        if not skill_ref:
+            return ToolResult("explain_skill_relationship", False, "No skill named.")
+
+        resolver = SkillResolver(self.session)
+        graph = SkillGraphService(self.session)
+
+        source = await resolver.resolve(skill_ref)
+        if source.status != "matched" or source.skill is None:
+            return ToolResult(
+                "explain_skill_relationship", False,
+                f"'{skill_ref}' does not match a skill in the catalogue.",
+            )
+        skill = source.skill
+
+        # Only one skill named: report what it unlocks.
+        if not related_ref:
+            dependents = await graph.get_dependents(skill.id)
+            names = [e.source_skill.name for e in dependents if e.source_skill is not None]
+            return ToolResult(
+                "explain_skill_relationship", True,
+                f"{skill.name} is required by {len(names)} skill(s).",
+                {"skill": skill.name, "unlocks": names, "target": None},
+            )
+
+        target = await resolver.resolve(related_ref)
+        if target.status != "matched" or target.skill is None:
+            return ToolResult(
+                "explain_skill_relationship", False,
+                f"'{related_ref}' does not match a skill in the catalogue.",
+            )
+        goal = target.skill
+
+        analysis = await graph.calculate_skill_dependencies(goal.id)
+        direct = {p.id for p in analysis.direct_prerequisites}
+        transitive_ids = {p.id for p in analysis.all_prerequisites}
+
+        if skill.id == goal.id:
+            relation = "same"
+        elif skill.id in direct:
+            relation = "direct"
+        elif skill.id in transitive_ids:
+            relation = "transitive"
+        else:
+            relation = "none"
+
+        # The chain from the prerequisite up to the goal, for a transitive link.
+        chain: list[str] = []
+        if relation == "transitive":
+            for level in analysis.levels:
+                for entry in level:
+                    if entry.id == skill.id:
+                        chain = [skill.name]
+                        break
+            chain = chain or [skill.name]
+            chain.append(goal.name)
+
+        summary = {
+            "same": f"{skill.name} and {goal.name} are the same skill.",
+            "direct": f"{skill.name} is a direct prerequisite of {goal.name}.",
+            "transitive": f"{skill.name} is an indirect prerequisite of {goal.name}.",
+            "none": f"{skill.name} is not a prerequisite of {goal.name}.",
+        }[relation]
+
+        return ToolResult(
+            "explain_skill_relationship", True, summary,
+            {
+                "skill": skill.name,
+                "target": goal.name,
+                "relation": relation,
+                "chain": chain,
+                "target_direct_prerequisites": [p.name for p in analysis.direct_prerequisites],
+            },
+        )
+
     # --- 9 ---------------------------------------------------------------
     async def get_goal_prerequisites(self) -> ToolResult:
         """What the learner's goal rests on, and which of it is still unknown.

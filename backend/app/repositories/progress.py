@@ -64,6 +64,49 @@ class UserProgressRepository(BaseRepository[UserProgress]):
         )
         return {row[0] for row in await self.session.execute(stmt) if row[0] is not None}
 
+    async def completed_resource_ids(self, user_id: uuid.UUID) -> set[uuid.UUID]:
+        """Every catalogue resource this learner has recorded as completed.
+
+        Read straight off the append-only event log rather than a denormalised
+        flag, so it stays true no matter which path the resource sat on — or
+        whether that path still exists.
+        """
+        stmt = select(distinct(UserProgress.resource_id)).where(
+            UserProgress.user_id == user_id,
+            UserProgress.resource_id.is_not(None),
+            UserProgress.event_type == ProgressEventType.COMPLETED,
+        )
+        return {row[0] for row in await self.session.execute(stmt) if row[0] is not None}
+
+    async def minutes_per_completed_item(
+        self, user_id: uuid.UUID, path_id: uuid.UUID
+    ) -> dict[uuid.UUID, int]:
+        """Total recorded minutes for each COMPLETED item on a path.
+
+        Time is summed over every event for the item, not just the completion
+        event — a learner logs a few sessions and then finishes, and the effort
+        that item actually cost is all of them together.
+        """
+        from app.models.path import LearningPathItem
+
+        completed = await self.completed_item_ids(user_id, path_id)
+        if not completed:
+            return {}
+        stmt = (
+            select(
+                UserProgress.path_item_id,
+                func.coalesce(func.sum(UserProgress.time_spent_minutes), 0),
+            )
+            .join(LearningPathItem, LearningPathItem.id == UserProgress.path_item_id)
+            .where(
+                UserProgress.user_id == user_id,
+                UserProgress.path_item_id.in_(completed),
+            )
+            .group_by(UserProgress.path_item_id)
+        )
+        rows = await self.session.execute(stmt)
+        return {row[0]: int(row[1] or 0) for row in rows if row[0] is not None}
+
     async def last_activity(self, user_id: uuid.UUID) -> datetime | None:
         stmt = select(func.max(UserProgress.occurred_at)).where(UserProgress.user_id == user_id)
         return (await self.session.execute(stmt)).scalar_one_or_none()
