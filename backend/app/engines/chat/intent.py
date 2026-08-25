@@ -9,7 +9,7 @@ to fetch. Patterns are ordered most-specific first.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import Enum
 
 
@@ -41,6 +41,10 @@ class Intent:
     query: str | None = None
     raw: str = ""
     matched: list[str] = field(default_factory=list)
+    #: Study time the learner mentioned, normalised to hours per week.
+    weekly_hours: int | None = None
+    #: Skills the learner claims to have already ("comfortable with Python").
+    known_skills: list[str] = field(default_factory=list)
 
 
 _GOAL_RE = re.compile(
@@ -75,6 +79,106 @@ _SEARCH_RE = re.compile(
 )
 _GREETING_RE = re.compile(r"^\s*(?:hi|hello|hey|yo|greetings)\b", re.IGNORECASE)
 
+# --- time budget ------------------------------------------------------------
+# "an hour a day", "2 hours a day", "about 10 hours a week", "a couple of
+# evenings a week". Everything is normalised to hours per WEEK, because that is
+# the unit `learner_profiles.weekly_hours` stores and the path generator plans
+# against. Spoken input is wordy, so the number may be a numeral or a word.
+_WORD_NUMBERS: dict[str, float] = {
+    "an": 1, "a": 1, "one": 1, "couple": 2, "two": 2, "three": 3, "four": 4,
+    "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+    "half an": 0.5, "half": 0.5,
+}
+_PER_WEEK = {"day": 7.0, "evening": 7.0, "night": 7.0, "week": 1.0, "weekend": 1.0}
+
+_HOURS_RE = re.compile(
+    r"(?:about|around|roughly|maybe|only|just)?\s*"
+    r"(?P<qty>\d{1,3}(?:\.\d+)?|half an|half|an|a|one|couple(?:\s+of)?|two|three|four|five|"
+    r"six|seven|eight|nine|ten)\s+"
+    r"hours?\s*"
+    r"(?:a|per|each|every)\s+(?P<unit>day|week|evening|night|weekend)",
+    re.IGNORECASE,
+)
+
+
+def extract_weekly_hours(text: str) -> int | None:
+    """Normalise a spoken time budget to whole hours per week.
+
+    Returns None when nothing was said — never a guess. Rounds to the nearest
+    hour and clamps to the profile's own 1..168 bound.
+    """
+    m = _HOURS_RE.search(text)
+    if not m:
+        return None
+    raw_qty = " ".join(m.group("qty").lower().replace(" of", "").split())
+    try:
+        qty = float(raw_qty)
+    except ValueError:
+        qty = _WORD_NUMBERS.get(raw_qty, 0.0)
+    if qty <= 0:
+        return None
+    per_week = _PER_WEEK.get(m.group("unit").lower(), 1.0)
+    hours = round(qty * per_week)
+    if hours < 1:
+        return None
+    return min(hours, 168)
+
+
+# --- already-known skills ---------------------------------------------------
+# "already comfortable with Python", "I know SQL and pandas", "I'm confident
+# with linear algebra". Captures the phrase only; resolving it to a real skill
+# id is the resolver's job, and an unresolvable claim is simply dropped.
+_KNOWN_RE = re.compile(
+    r"(?:already\s+)?(?:i(?:'|\u2019)?m\s+|i\s+am\s+|i\s+)?"
+    r"(?:comfortable|confident|familiar|experienced|good|solid|strong|fine)\s+"
+    r"(?:with|at|in|on)\s+(?P<skills>[a-z0-9 ,/+\-]{2,80}?)"
+    r"(?:\.|;|!|\?|$|\band\b\s+i\b|\bbut\b|\bso\b)",
+    re.IGNORECASE,
+)
+_KNOW_VERB_RE = re.compile(
+    r"\bi\s+(?:already\s+)?know\s+(?P<skills>[a-z0-9 ,/+\-]{2,80}?)"
+    r"(?:\.|;|!|\?|$|\band\b\s+i\b|\bbut\b|\bso\b)",
+    re.IGNORECASE,
+)
+_SKILL_SPLIT_RE = re.compile(r"\s*(?:,|/|\band\b)\s*", re.IGNORECASE)
+#: Words that survive the split but never name a skill.
+_SKILL_STOPWORDS = {"the", "a", "an", "it", "that", "this", "some", "basics", "bit"}
+#: A skill name is a noun phrase. Any of these means we caught a clause instead
+#: — "I know that this is hard" is not a claim to know a skill called
+#: "that this is hard".
+_CLAUSE_WORDS = {
+    "is", "are", "was", "were", "be", "been", "am", "will", "would", "can",
+    "could", "should", "do", "does", "did", "have", "has", "had", "that",
+    "this", "it", "there", "how", "what", "why", "when", "where", "you",
+    "we", "they", "nothing", "anything", "much",
+}
+#: Longest plausible skill name ("natural language processing" is three).
+_MAX_SKILL_WORDS = 4
+
+
+def _looks_like_skill(name: str) -> bool:
+    words = name.split()
+    if not words or len(words) > _MAX_SKILL_WORDS:
+        return False
+    return not any(w in _CLAUSE_WORDS for w in words)
+
+
+def extract_known_skills(text: str) -> list[str]:
+    """Skill phrases the learner claims to already have. Order-preserving, deduped."""
+    found: list[str] = []
+    for pattern in (_KNOWN_RE, _KNOW_VERB_RE):
+        for m in pattern.finditer(text):
+            for part in _SKILL_SPLIT_RE.split(m.group("skills")):
+                name = " ".join(part.split()).strip(" .,:;!?").lower()
+                if not name or name in _SKILL_STOPWORDS or len(name) < 2:
+                    continue
+                if not _looks_like_skill(name):
+                    continue
+                if name not in found:
+                    found.append(name)
+    return found
+
+
 
 def _clean(text: str | None) -> str | None:
     if not text:
@@ -83,7 +187,7 @@ def _clean(text: str | None) -> str | None:
     return cleaned or None
 
 
-def detect_intent(message: str) -> Intent:
+def _classify(message: str) -> Intent:
     text = message.strip()
     low = text.lower()
 
@@ -151,3 +255,21 @@ def detect_intent(message: str) -> Intent:
         return Intent(IntentKind.GREETING, raw=text, matched=["greeting"])
 
     return Intent(IntentKind.UNKNOWN, raw=text)
+
+
+def detect_intent(message: str) -> Intent:
+    """Classify the message, then attach the facts that are orthogonal to it.
+
+    A learner rarely says one thing at a time — "I want to be an ML engineer,
+    I have an hour a day and I already know Python" is one goal, one time
+    budget and one skill claim in a single breath, and that is even more true
+    of speech than of typing. Classification picks the single intent; the time
+    budget and skill claims ride along with whatever that intent turned out to
+    be, so none of them is lost.
+    """
+    intent = _classify(message)
+    return replace(
+        intent,
+        weekly_hours=extract_weekly_hours(message),
+        known_skills=extract_known_skills(message),
+    )

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { IconArrow, IconCheck, IconLock, IconSpark, IconTarget } from "@/components/ui/icons";
 import { getToken, graphApi } from "@/lib/api";
@@ -12,11 +12,13 @@ import {
   directDependents,
   directPrerequisites,
   edgeBetween,
+  masteryState,
   transitive,
   type GraphModel,
   type GraphNode,
   type MasteryState,
 } from "@/lib/graph-view";
+import type { GraphProficiency } from "@/lib/graph-derive";
 
 const TONE: Record<MasteryState, "success" | "warning" | "danger" | "neutral"> = {
   mastered: "success",
@@ -33,17 +35,29 @@ const TONE: Record<MasteryState, "success" | "warning" | "danger" | "neutral"> =
 export function SkillDetailPanel({
   skill,
   model,
+  proficiencies,
   isDemo,
   onSelect,
 }: {
   skill: GraphNode | null;
   model: GraphModel;
+  /**
+   * The learner's full proficiency list. Skills the API reports as unlocked may
+   * sit outside the drawn graph, and their state has to come from here — the
+   * panel must not assume "not started" for a skill it simply hasn't drawn.
+   */
+  proficiencies: GraphProficiency[];
   isDemo: boolean;
   onSelect: (id: string) => void;
 }) {
   // The graph only holds the part of the catalogue on this learner's route, so
   // "what does this unlock" is asked of the backend, which sees all of it.
   const [wider, setWider] = useState<GraphNode[] | null>(null);
+
+  const bySlug = useMemo(
+    () => new Map(proficiencies.map((p) => [p.slug, p])),
+    [proficiencies],
+  );
 
   useEffect(() => {
     setWider(null);
@@ -54,24 +68,31 @@ export function SkillDetailPanel({
       .then((d) => {
         if (cancelled) return;
         setWider(
-          d.unlocks.map((u) => ({
-            id: u.id,
-            slug: u.slug,
-            name: u.name,
-            difficulty: u.difficulty,
-            category: null,
-            isTarget: false,
-            proficiency: null,
-            required: null,
-            state: "not_started" as MasteryState,
-          })),
+          d.unlocks.map((u) => {
+            // A skill can be unlocked-but-already-learned. Only a skill with no
+            // record at all is genuinely "not started".
+            const tracked = bySlug.get(u.slug);
+            const proficiency = tracked ? tracked.current : null;
+            const required = tracked ? tracked.target : null;
+            return {
+              id: u.id,
+              slug: u.slug,
+              name: u.name,
+              difficulty: u.difficulty,
+              category: null,
+              isTarget: false,
+              proficiency,
+              required,
+              state: masteryState(proficiency, required),
+            };
+          }),
         );
       })
       .catch(() => undefined);
     return () => {
       cancelled = true;
     };
-  }, [skill, isDemo]);
+  }, [skill, isDemo, bySlug]);
 
   if (!skill) {
     return (

@@ -35,10 +35,7 @@ def compose_reply(intent: Intent, results: list[ToolResult]) -> str:
     if intent.kind == IntentKind.SET_GOAL:
         profile = tools.get("get_learner_profile")
         goal = intent.goal_text or (profile.data.get("target_role") if profile else None)
-        return (
-            f"Got it — your goal is to become a {goal}. I've saved that. "
-            "Ask me to generate your learning path, or say 'what should I learn next?'."
-        )
+        return _compose_goal_reply(intent, goal, tools.get("get_goal_prerequisites"))
 
     if intent.kind == IntentKind.NEXT_ACTION:
         return _relay(tools.get("get_next_action"),
@@ -153,6 +150,76 @@ def compose_reply(intent: Intent, results: list[ToolResult]) -> str:
         "explain recommendations, search for resources, and record what you've completed. "
         "What would you like to do?"
     )
+
+
+def _compose_goal_reply(
+    intent: Intent, goal: str | None, prereqs: ToolResult | None
+) -> str:
+    """The onboarding turn: confirm the goal, reflect back what else was said,
+    propose a starting point, and ask ONE thing we genuinely do not know.
+
+    A learner states a goal, a time budget and their existing skills in one
+    breath. Acknowledging only the goal makes the coach feel deaf, and it also
+    wastes what it was told — so each fact that was actually extracted gets a
+    clause, and facts that were NOT stated get no clause at all rather than a
+    guess.
+
+    The closing question is asked only when a tool confirmed a real unmet
+    prerequisite. If the goal did not resolve to a catalogue skill, the coach
+    says what it can do next instead of inventing something to ask about.
+    """
+    parts: list[str] = [f"Got it — your goal is to become a {goal}." if goal else "Got it."]
+
+    if intent.known_skills:
+        # Echo the catalogue's spelling ("SQL", not "sql") when the claim
+        # resolved to a real skill; otherwise repeat the learner's own words.
+        claimed = [_canonical(name, prereqs) for name in intent.known_skills]
+        parts.append(
+            f"Since you're already comfortable with {_join(claimed)}, "
+            f"I won't start you on beginner {claimed[0]} material."
+        )
+
+    unknown = list(prereqs.data.get("unknown", [])) if prereqs and prereqs.available else []
+    if intent.weekly_hours:
+        budget = f"With roughly {intent.weekly_hours} hours a week"
+        if unknown:
+            starting = _join([u["skill"] for u in unknown[:2]])
+            parts.append(f"{budget}, I'd suggest starting with {starting}.")
+        else:
+            parts.append(f"{budget}, I'll pace the roadmap to fit.")
+    elif unknown:
+        starting = _join([u["skill"] for u in unknown[:2]])
+        parts.append(f"I'd suggest starting with {starting}.")
+
+    if unknown:
+        parts.append(
+            "Before I finalise the roadmap, can I ask how comfortable you are "
+            f"with {unknown[0]['skill']}?"
+        )
+    else:
+        parts.append(
+            "Ask me to generate your learning path, or say 'what should I learn next?'."
+        )
+    return " ".join(parts)
+
+
+def _canonical(name: str, prereqs: ToolResult | None) -> str:
+    """The catalogue's name for a claimed skill, or the claim unchanged."""
+    if prereqs and prereqs.available:
+        for bucket in ("met", "unknown"):
+            for entry in prereqs.data.get(bucket, []):
+                if entry.get("skill", "").lower() == name.lower():
+                    return str(entry["skill"])
+    return name
+
+
+def _join(items: list[str]) -> str:
+    """'a', 'a and b', 'a, b and c' — spoken aloud, an Oxford comma reads oddly."""
+    if not items:
+        return ""
+    if len(items) == 1:
+        return items[0]
+    return f"{', '.join(items[:-1])} and {items[-1]}"
 
 
 def _relay(result: ToolResult | None, *, unavailable: str | None = None, render=None) -> str:  # type: ignore[no-untyped-def]

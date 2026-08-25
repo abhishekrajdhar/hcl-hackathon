@@ -3,10 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
-import { IconChat, IconSend, IconSpark } from "@/components/ui/icons";
+import { IconChat, IconMic, IconSend, IconSpark } from "@/components/ui/icons";
 import { clsx } from "@/lib/cn";
 import { useChat, type ChatMessage } from "@/lib/hooks/useChat";
+import { useVoiceCoach } from "@/lib/hooks/useVoiceCoach";
 import { ToolCards } from "@/components/dashboard/chat/ToolCards";
+import { VoiceControls } from "@/components/dashboard/chat/VoiceControls";
 
 const SUGGESTIONS = [
   "I want to become an NLP engineer",
@@ -35,6 +37,7 @@ export function Assistant({
   } = useChat();
   const [text, setText] = useState("");
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [voiceMode, setVoiceMode] = useState(false);
   // Ids of animated messages whose typewriter reveal has finished.
   const [revealed, setRevealed] = useState<Set<string>>(new Set());
   const endRef = useRef<HTMLDivElement>(null);
@@ -42,6 +45,23 @@ export function Assistant({
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, revealed]);
+
+  // A spoken utterance goes through exactly the same `send` as a typed one,
+  // so the two input modes cannot drift apart.
+  const voice = useVoiceCoach({ onUtterance: (t) => void send(t), sending });
+  const { speakReply, voiceReplies } = voice;
+
+  // Read each new assistant reply aloud once. Keyed on message id so a
+  // re-render never repeats one, and history loads never replay the backlog.
+  const spokenRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!voiceMode || !voiceReplies) return;
+    const last = messages[messages.length - 1];
+    if (!last || last.role !== "assistant" || last.id === "welcome") return;
+    if (spokenRef.current === last.id) return;
+    spokenRef.current = last.id;
+    speakReply(last.content);
+  }, [messages, voiceMode, voiceReplies, speakReply]);
 
   const submit = (value?: string) => {
     const v = value ?? text;
@@ -110,6 +130,25 @@ export function Assistant({
             >
               New chat
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                setVoiceMode((v) => {
+                  if (v) voice.stopSpeaking();
+                  return !v;
+                });
+              }}
+              aria-pressed={voiceMode}
+              className={clsx(
+                "flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs transition-colors",
+                voiceMode
+                  ? "border-brand bg-brand-soft text-brand"
+                  : "border-border bg-surface-2 text-muted hover:text-fg",
+              )}
+            >
+              <IconMic className="h-3.5 w-3.5" />
+              Voice
+            </button>
             <Badge tone="brand">coach</Badge>
           </div>
         }
@@ -153,6 +192,12 @@ export function Assistant({
               {s}
             </button>
           ))}
+        </div>
+      )}
+
+      {voiceMode && (
+        <div className="border-t border-border px-3 pt-3">
+          <VoiceControls voice={voice} />
         </div>
       )}
 

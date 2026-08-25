@@ -15,7 +15,7 @@ const ZOOMS = [0.75, 1, 1.25];
 
 /** The knowledge-graph tab: the prerequisite DAG, coloured by mastery. */
 export function KnowledgeGraph({ data }: { data: DashboardData }) {
-  const { graph, loading, isDemo } = useKnowledgeGraph(data, data.isDemo);
+  const { graph, proficiencies, loading, isDemo } = useKnowledgeGraph(data, data.isDemo);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
 
@@ -91,6 +91,7 @@ export function KnowledgeGraph({ data }: { data: DashboardData }) {
             <SkillDetailPanel
               skill={selected}
               model={graph}
+              proficiencies={proficiencies}
               isDemo={isDemo}
               onSelect={setSelectedId}
             />

@@ -20,7 +20,7 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import ForbiddenError, NotFoundError
+from app.core.errors import AppError, ForbiddenError, NotFoundError
 from app.core.logging import get_logger
 from app.embeddings.base import EmbeddingProvider
 from app.engines.chat import IntentKind, compose_reply, detect_intent
@@ -28,15 +28,25 @@ from app.engines.chat.intent import Intent
 from app.engines.explanation import check_grounding
 from app.llm.base import LLMError, LLMProvider
 from app.models.conversation import Conversation, ConversationMessage
-from app.models.enums import ChatRole
+from app.models.enums import ChatRole, EvidenceSource
 from app.repositories.conversation import ConversationRepository
 from app.schemas.chat import ChatResponse, ToolInvocation
-from app.schemas.profile import LearnerProfileUpdate
+from app.schemas.profile import LearnerProfileUpdate, SkillProficiencyCreate
 from app.services.base import BaseService
 from app.services.chat_tools import TOOL_DESCRIPTIONS, ChatToolExecutor, ToolResult
 from app.services.profile_service import ProfileService
+from app.services.skill_resolver import SkillResolver
 
 logger = get_logger(__name__)
+
+#: "Comfortable with X" lands in the intermediate band (0.60-0.80 in
+#: `engines/adaptive/decisions.py`) — enough to skip introductory material,
+#: not enough to claim mastery.
+_CLAIMED_PROFICIENCY = 0.70
+#: Confidence is low: this is something said in passing, not an assessment.
+_CLAIMED_CONFIDENCE = 0.45
+#: Cap the per-turn writes a single sentence can trigger.
+_MAX_CLAIMED_SKILLS = 5
 
 SYSTEM_PROMPT = (
     "You are a personalized learning coach for a single learner. You are warm, "
@@ -79,6 +89,13 @@ class ChatService(BaseService):
         # side-effecting intents (writes) are handled explicitly, not by the LLM
         if intent.kind == IntentKind.SET_GOAL and intent.goal_text:
             await self._set_goal(user_id, intent.goal_text)
+        # A time budget and skill claims can ride on ANY intent, so they are
+        # applied outside the intent branch. Both are no-ops when the learner
+        # said nothing about them.
+        if intent.weekly_hours:
+            await self._set_weekly_hours(user_id, intent.weekly_hours)
+        if intent.known_skills:
+            await self._record_known_skills(user_id, intent.known_skills)
 
         results = await self._run_tools(user_id, intent)
         draft = compose_reply(intent, results)
@@ -160,6 +177,51 @@ class ChatService(BaseService):
                 user_id, LearnerProfileCreate(target_role=goal_text, goal_text_raw=goal_text)
             )
 
+    async def _set_weekly_hours(self, user_id: uuid.UUID, hours: int) -> None:
+        """Persist a stated study budget. The path generator plans against it."""
+        service = ProfileService(self.session)
+        try:
+            await service.update_for_user(user_id, LearnerProfileUpdate(weekly_hours=hours))
+        except NotFoundError:
+            from app.schemas.profile import LearnerProfileCreate
+
+            await service.create_for_user(user_id, LearnerProfileCreate(weekly_hours=hours))
+
+    async def _record_known_skills(self, user_id: uuid.UUID, names: list[str]) -> None:
+        """Record skills the learner says they already have.
+
+        Two deliberate limits. A claim that does not resolve to exactly one
+        catalogue skill is DROPPED, never guessed at — a wrong skill id would
+        corrupt the gap analysis downstream. And a claim never overwrites an
+        existing record: an assessment result is harder evidence than something
+        said in passing, so self-report only fills a blank.
+        """
+        resolver = SkillResolver(self.session)
+        service = ProfileService(self.session)
+        for name in names[:_MAX_CLAIMED_SKILLS]:
+            resolution = await resolver.resolve(name)
+            if resolution.status != "matched" or resolution.skill is None:
+                logger.info("skill claim unresolved", claim=name, status=resolution.status)
+                continue
+            try:
+                await service.get_skill(user_id, resolution.skill.id)
+                continue  # already recorded — harder evidence wins
+            except NotFoundError:
+                pass
+            try:
+                await service.set_skill_proficiency(
+                    user_id,
+                    SkillProficiencyCreate(
+                        skill_id=resolution.skill.id,
+                        proficiency=_CLAIMED_PROFICIENCY,
+                        confidence=_CLAIMED_CONFIDENCE,
+                        evidence_source=EvidenceSource.SELF_REPORT,
+                        notes=f'Self-reported in conversation: "{name}"',
+                    ),
+                )
+            except AppError as exc:  # pragma: no cover - defensive
+                logger.info("skill claim not recorded", claim=name, error=str(exc))
+
     # --- optional LLM rephrase (grounded) --------------------------------
     async def _maybe_rephrase(
         self, message: str, draft: str, results: list[ToolResult]
@@ -198,7 +260,7 @@ class ChatService(BaseService):
 #: never chooses what application data to read.
 _TOOL_PLAN: dict[IntentKind, list[str]] = {
     IntentKind.GREETING: ["get_learner_profile"],
-    IntentKind.SET_GOAL: ["get_learner_profile"],
+    IntentKind.SET_GOAL: ["get_learner_profile", "get_goal_prerequisites"],
     IntentKind.NEXT_ACTION: ["get_next_action"],
     IntentKind.WEEKLY_PLAN: ["get_current_learning_path", "get_progress"],
     IntentKind.EXPLAIN_RECOMMENDATION: ["get_recommendations"],

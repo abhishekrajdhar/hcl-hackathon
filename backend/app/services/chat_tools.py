@@ -26,6 +26,8 @@ from app.services.path_generator_service import PathGeneratorService
 from app.services.profile_service import ProfileService
 from app.services.progress_service import ProgressService
 from app.services.search_service import SemanticSearchService
+from app.services.skill_graph_service import SkillGraphService
+from app.services.skill_resolver import SkillResolver
 
 #: Tool catalogue (name -> one-line description), exposed for the system prompt.
 TOOL_DESCRIPTIONS: dict[str, str] = {
@@ -37,6 +39,7 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
     "get_next_action": "The single next step the learner should take.",
     "search_resources": "Search the catalogue for resources relevant to a query.",
     "update_learning_progress": "Record a completed resource or an assessment score and adapt the path.",
+    "get_goal_prerequisites": "Direct prerequisites of the learner's goal skill, split into met and unknown.",
 }
 
 
@@ -233,6 +236,75 @@ class ChatToolExecutor:
                           "Tell me what you completed or the score you got.")
 
     # --- helpers ---------------------------------------------------------
+    # --- 9 ---------------------------------------------------------------
+    async def get_goal_prerequisites(self) -> ToolResult:
+        """What the learner's goal rests on, and which of it is still unknown.
+
+        The goal is stored as free text ("machine learning engineer"), so it is
+        resolved to a catalogue skill first. A role that does not resolve
+        confidently yields `available=False` — the assistant then simply does
+        not ask a prerequisite question, rather than inventing one about a
+        skill the graph never confirmed.
+        """
+        try:
+            profile = await ProfileService(self.session).get_for_user(self.user_id)
+        except AppError:
+            return ToolResult("get_goal_prerequisites", False, "No learner profile yet.")
+        goal_text = (profile.target_role or profile.goal_text_raw or "").strip()
+        if not goal_text:
+            return ToolResult("get_goal_prerequisites", False, "No goal recorded yet.")
+
+        resolution = await SkillResolver(self.session).resolve(goal_text)
+        if resolution.status != "matched" or resolution.skill is None:
+            return ToolResult(
+                "get_goal_prerequisites", False,
+                f"'{goal_text}' does not map onto a single catalogue skill.",
+            )
+
+        goal_skill = resolution.skill
+        edges = await SkillGraphService(self.session).get_prerequisites(goal_skill.id)
+        if not edges:
+            return ToolResult(
+                "get_goal_prerequisites", True,
+                f"{goal_skill.name} has no prerequisites.",
+                {"goal_skill": goal_skill.name, "met": [], "unknown": []},
+            )
+
+        # `list_skills` returns the canonical [0, 1] proficiency, which is the
+        # scale every band in the app is expressed in.
+        recorded = {
+            us.skill_id: us.proficiency
+            for us in (await ProfileService(self.session).list_skills(self.user_id))
+        }
+
+        met: list[dict[str, Any]] = []
+        unknown: list[dict[str, Any]] = []
+        for edge in edges:
+            skill = edge.prerequisite_skill
+            if skill is None:
+                continue
+            entry = {
+                "skill": skill.name,
+                "slug": skill.slug,
+                "required": edge.relationship_type.value == "hard_prerequisite",
+            }
+            if edge.prerequisite_skill_id in recorded:
+                entry["level"] = recorded[edge.prerequisite_skill_id]
+                met.append(entry)
+            else:
+                unknown.append(entry)
+
+        # Hard prerequisites first: those are the ones that actually gate the goal.
+        unknown.sort(key=lambda e: (not e["required"], e["skill"]))
+        summary = (
+            f"{goal_skill.name} rests on {len(edges)} prerequisite(s); "
+            f"{len(met)} recorded, {len(unknown)} not yet known."
+        )
+        return ToolResult(
+            "get_goal_prerequisites", True, summary,
+            {"goal_skill": goal_skill.name, "met": met, "unknown": unknown},
+        )
+
     async def _active_roadmap(self):  # type: ignore[no-untyped-def]
         try:
             return await PathGeneratorService(self.session).get_active_roadmap(

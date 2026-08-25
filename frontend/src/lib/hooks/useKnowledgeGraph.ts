@@ -8,6 +8,7 @@ import {
   goalSlugs,
   pickExpandSlugs,
   toProficiencies,
+  type GraphProficiency,
 } from "@/lib/graph-derive";
 import { demoGraph } from "@/lib/graph-demo";
 import type { GraphModel } from "@/lib/graph-view";
@@ -18,6 +19,8 @@ const MAX_TARGETS = 6;
 
 interface State {
   graph: GraphModel;
+  /** The learner's full proficiency list; empty in demo mode. */
+  proficiencies: GraphProficiency[];
   loading: boolean;
   isDemo: boolean;
   error: string | null;
@@ -32,6 +35,7 @@ interface State {
 export function useKnowledgeGraph(data: DashboardData, dashboardIsDemo: boolean) {
   const [state, setState] = useState<State>({
     graph: demoGraph,
+    proficiencies: [],
     loading: true,
     isDemo: true,
     error: null,
@@ -41,7 +45,7 @@ export function useKnowledgeGraph(data: DashboardData, dashboardIsDemo: boolean)
     setState((s) => ({ ...s, loading: true, error: null }));
 
     if (!getToken() || dashboardIsDemo) {
-      setState({ graph: demoGraph, loading: false, isDemo: true, error: null });
+      setState({ graph: demoGraph, proficiencies: [], loading: false, isDemo: true, error: null });
       return;
     }
 
@@ -65,7 +69,7 @@ export function useKnowledgeGraph(data: DashboardData, dashboardIsDemo: boolean)
       const targetSlugs = goalSlugs(roadmapSlugs, proficiencies);
       const expandSlugs = pickExpandSlugs(roadmapSlugs, proficiencies, MAX_TARGETS);
       if (!expandSlugs.length) {
-        setState({ graph: demoGraph, loading: false, isDemo: true, error: null });
+        setState({ graph: demoGraph, proficiencies: [], loading: false, isDemo: true, error: null });
         return;
       }
 
@@ -76,7 +80,7 @@ export function useKnowledgeGraph(data: DashboardData, dashboardIsDemo: boolean)
         .filter((id): id is string => Boolean(id));
 
       if (!targetIds.length) {
-        setState({ graph: demoGraph, loading: false, isDemo: true, error: null });
+        setState({ graph: demoGraph, proficiencies: [], loading: false, isDemo: true, error: null });
         return;
       }
 
@@ -91,7 +95,7 @@ export function useKnowledgeGraph(data: DashboardData, dashboardIsDemo: boolean)
       ).filter((c): c is SkillGraphResponse => Boolean(c));
 
       if (!closures.length) {
-        setState({ graph: demoGraph, loading: false, isDemo: true, error: null });
+        setState({ graph: demoGraph, proficiencies: [], loading: false, isDemo: true, error: null });
         return;
       }
 
@@ -103,10 +107,11 @@ export function useKnowledgeGraph(data: DashboardData, dashboardIsDemo: boolean)
         goal: data.goal,
       });
 
-      setState({ graph, loading: false, isDemo: false, error: null });
+      setState({ graph, proficiencies, loading: false, isDemo: false, error: null });
     } catch (e) {
       setState({
         graph: demoGraph,
+        proficiencies: [],
         loading: false,
         isDemo: true,
         error: e instanceof Error ? e.message : "Failed to load the skill graph",

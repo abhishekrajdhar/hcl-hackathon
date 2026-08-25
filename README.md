@@ -222,7 +222,37 @@ message → detect intent (rule-based) → select tools → run tools (real serv
 ```
 
 Intent detection is pure regex over ordered, most-specific-first patterns — the
-model never decides what to fetch. The eight tools available to it:
+model never decides what to fetch.
+
+A learner rarely says one thing at a time, and least of all out loud. On top of
+the single intent, every turn is also scanned for a **time budget** and for
+**skills the learner claims to have**, because "I want to be an ML engineer, I
+have an hour a day and I already know Python" is all three at once. Both are
+pure functions in `engines/chat/intent.py`: the budget is normalised to hours
+per week (an hour a day → 7), and skill claims are resolved against the
+catalogue, with anything that does not resolve to exactly one skill dropped
+rather than guessed at. A claim never overwrites an existing record — an
+assessment result is harder evidence than a passing remark, so self-report only
+fills a blank.
+
+That turns goal-setting into a real onboarding exchange:
+
+> **"I want to become a machine learning engineer, but I only have about an hour
+> a day and I'm already comfortable with Python."**
+>
+> Got it — your goal is to become a machine learning engineer. Since you're
+> already comfortable with Python, I won't start you on beginner Python
+> material. With roughly 7 hours a week, I'd suggest starting with Linear
+> Algebra and Statistics. Before I finalise the roadmap, can I ask how
+> comfortable you are with Linear Algebra?
+
+Every clause is earned: Python came from the sentence, 7 hours from arithmetic
+on it, and Linear Algebra from `get_goal_prerequisites` — the prerequisites of
+the goal skill that the learner has no record for. When the goal does not
+resolve to a catalogue skill, the closing question is simply not asked, rather
+than invented.
+
+The nine tools available to it:
 
 | Tool | Returns |
 |---|---|
@@ -234,6 +264,43 @@ model never decides what to fetch. The eight tools available to it:
 | `get_next_action` | The single next step |
 | `search_resources` | Catalogue search for a query |
 | `update_learning_progress` | Record a completion or score, adapt the path |
+| `get_goal_prerequisites` | What the goal rests on, split into met and unknown |
+
+## Talking to it
+
+The assistant can be driven by voice. The loop wraps the pipeline above without
+altering it:
+
+```
+speak → speech-to-text → (the unchanged /chat pipeline) → reply → text-to-speech
+```
+
+A spoken turn calls exactly the same `send` as a typed one, so the two input
+modes cannot drift apart — the intent engine, the tools and the grounding check
+are identical either way, and the transcript is the same conversation.
+
+Speech runs in the **browser**, through the platform's own Web Speech API: no
+API key, no extra dependency, no backend route, in keeping with the way the rest
+of the app defaults to providers that work with nothing configured. The seam in
+`lib/voice/speech.ts` is narrow on purpose (start/stop/speak/cancel) so a
+server-side provider — Whisper for transcription, a TTS endpoint for audio —
+can replace it without touching the hook or the UI.
+
+Details that matter when a coach talks rather than types:
+
+- **Barge-in.** Speaking over a reply cancels it, which also stops the
+  microphone hearing the synthesiser.
+- **Replies are rewritten for the ear**, not the eye: `85%` is spoken as "85
+  percent", `1 skill(s)` as "1 skill" and `2 skill(s)` as "2 skills", and URLs
+  become "the link on screen".
+- **Graceful degradation.** A browser with no speech support keeps the text
+  chat and says so; a denied microphone shows what to do and returns to idle
+  rather than hanging on "listening".
+
+**Privacy:** `speechSynthesis` runs on the device, but browser speech
+*recognition* does not — Chrome and Safari stream microphone audio to their own
+speech services to transcribe it. The UI states this before the microphone is
+ever opened.
 
 ## Layout
 
@@ -282,7 +349,8 @@ model never decides what to fetch. The eight tools available to it:
         │   └── ui/              # primitives
         └── lib/
             ├── api/             # typed endpoint layer over one fetch client
-            ├── hooks/           # auth, chat, dashboard data, theme, toast
+            ├── voice/           # browser speech-to-text and text-to-speech
+            ├── hooks/           # auth, chat, voice, dashboard data, theme, toast
             └── derive.ts        # API response → dashboard view model
 ```
 

@@ -35,3 +35,8 @@ export const IconSend = base(<><path d="M4 12l16-8-6 16-3-6-7-2z" /></>);
 export const IconLogout = base(<><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" /></>);
 export const IconLayers = base(<><path d="M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5M3 17l9 5 9-5" /></>);
 export const IconGraph = base(<><circle cx="12" cy="4" r="2" /><circle cx="5" cy="15" r="2" /><circle cx="19" cy="15" r="2" /><circle cx="12" cy="21" r="1.5" /><path d="M12 6v3M11 9.5 6.5 13M13 9.5l4.5 3.5M6.5 16.5 11 20M17.5 16.5 13 20" /></>);
+export const IconMic = base(<><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6" /></>);
+export const IconMicOff = base(<><path d="M9 9V6a3 3 0 0 1 5.1-2.1M15 11.5V6M5 11a7 7 0 0 0 10.9 5.8M12 18v3M9 21h6M3 3l18 18" /></>);
+export const IconSpeaker = base(<><path d="M4 9v6h4l5 4V5L8 9H4z" /><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8 8 0 0 1 0 12" /></>);
+export const IconSpeakerOff = base(<><path d="M4 9v6h4l5 4V5L8 9H4z" /><path d="M17 9l4 6M21 9l-4 6" /></>);
+export const IconStop = base(<><rect x="6" y="6" width="12" height="12" rx="2" /></>);
