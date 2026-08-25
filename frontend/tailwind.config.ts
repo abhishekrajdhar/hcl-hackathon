@@ -5,35 +5,55 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // World surfaces
-        void: "var(--void)",
-        panel: { DEFAULT: "var(--panel)", 2: "var(--panel-2)", 3: "var(--panel-3)" },
-        line: { DEFAULT: "var(--line)", strong: "var(--line-strong)" },
-        // Signal colours — these carry meaning, see globals.css
-        cyan: { DEFAULT: "var(--cyan)", dim: "var(--cyan-dim)" },
-        teal: "var(--teal)",
-        amber: "var(--amber)",
-        coral: "var(--coral)",
-        steel: "var(--steel)",
-        text: { DEFAULT: "var(--text)", 2: "var(--text-2)", 3: "var(--text-3)" },
-        state: {
-          mastered: "var(--state-mastered)",
-          active: "var(--state-active)",
-          weak: "var(--state-weak)",
-          locked: "var(--state-locked)",
+        // Every colour is `rgb(var(--x-rgb) / <alpha-value>)` so Tailwind's
+        // opacity modifiers (`border-cyan/40`, `bg-panel/70`) actually compose.
+        void: "rgb(var(--void-rgb) / <alpha-value>)",
+        panel: {
+          DEFAULT: "rgb(var(--panel-rgb) / <alpha-value>)",
+          2: "rgb(var(--panel-2-rgb) / <alpha-value>)",
+          3: "rgb(var(--panel-3-rgb) / <alpha-value>)",
         },
-        // Legacy aliases, kept so existing components restyle automatically
-        bg: "var(--bg)",
-        surface: "var(--surface)",
-        "surface-2": "var(--surface-2)",
-        border: "var(--border)",
-        muted: "var(--muted)",
-        fg: "var(--fg)",
-        brand: { DEFAULT: "var(--brand)", soft: "var(--brand-soft)" },
-        accent: "var(--accent)",
-        success: "var(--success)",
-        warning: "var(--warning)",
-        danger: "var(--danger)",
+        line: {
+          DEFAULT: "rgb(var(--line-rgb) / <alpha-value>)",
+          strong: "rgb(var(--line-strong-rgb) / <alpha-value>)",
+        },
+        cyan: {
+          DEFAULT: "rgb(var(--cyan-rgb) / <alpha-value>)",
+          dim: "rgb(var(--cyan-dim-rgb) / <alpha-value>)",
+        },
+        teal: "rgb(var(--teal-rgb) / <alpha-value>)",
+        amber: "rgb(var(--amber-rgb) / <alpha-value>)",
+        coral: "rgb(var(--coral-rgb) / <alpha-value>)",
+        steel: "rgb(var(--steel-rgb) / <alpha-value>)",
+        text: {
+          DEFAULT: "rgb(var(--text-rgb) / <alpha-value>)",
+          2: "rgb(var(--text-2-rgb) / <alpha-value>)",
+          3: "rgb(var(--text-3-rgb) / <alpha-value>)",
+        },
+        state: {
+          mastered: "rgb(var(--amber-rgb) / <alpha-value>)",
+          active: "rgb(var(--cyan-rgb) / <alpha-value>)",
+          weak: "rgb(var(--coral-rgb) / <alpha-value>)",
+          locked: "rgb(var(--steel-rgb) / <alpha-value>)",
+        },
+        // Legacy aliases, so existing components restyle without edits.
+        bg: "rgb(var(--void-rgb) / <alpha-value>)",
+        surface: {
+          DEFAULT: "rgb(var(--panel-rgb) / <alpha-value>)",
+          2: "rgb(var(--panel-2-rgb) / <alpha-value>)",
+        },
+        "surface-2": "rgb(var(--panel-2-rgb) / <alpha-value>)",
+        border: "rgb(var(--line-rgb) / <alpha-value>)",
+        muted: "rgb(var(--text-2-rgb) / <alpha-value>)",
+        fg: "rgb(var(--text-rgb) / <alpha-value>)",
+        brand: {
+          DEFAULT: "rgb(var(--cyan-rgb) / <alpha-value>)",
+          soft: "rgb(var(--cyan-rgb) / 0.12)",
+        },
+        accent: "rgb(var(--teal-rgb) / <alpha-value>)",
+        success: "rgb(var(--amber-rgb) / <alpha-value>)",
+        warning: "rgb(var(--cyan-rgb) / <alpha-value>)",
+        danger: "rgb(var(--coral-rgb) / <alpha-value>)",
       },
       // Machined, not pillowy: the whole UI drops to near-square corners.
       borderRadius: { xl: "5px", "2xl": "6px" },

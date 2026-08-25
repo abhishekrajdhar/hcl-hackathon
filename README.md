@@ -466,10 +466,21 @@ the repository level.
 
 ## Frontend
 
-A landing page (with a live 3D starfield backdrop) and a signed-in dashboard
-with twelve tabs — Overview, Learning Universe, Next Action, Roadmap, Learning
-Path, Skill Progress, Knowledge Graph, Milestones, Recommended, Assessments,
-Activity, AI Assistant.
+A landing page, dedicated `/login` and `/signup` routes, and a signed-in
+dashboard with twelve sections — Learning Universe, Overview, Current Mission,
+Roadmap, Learning Path, Skill Progress, Knowledge Graph, Milestones,
+Recommended, Assessments, AI Coach, System.
+
+Authentication is its own route rather than a form wearing the dashboard's
+chrome: `/dashboard` redirects an unauthenticated visitor to `/login`, and
+`/dashboard?demo=1` opens the bundled demo dataset with no account at all.
+Both `POST /auth/login` and `POST /auth/register` return a token, which the API
+client stores before the route pushes on to the dashboard.
+
+The **System** section probes nine subsystems live and reports what actually
+came back — status, latency, and the database component from `/health`. A 401
+or 403 counts as reachable, because the question it answers is whether the
+backend is connected, not whether you are an admin.
 
 The **Learning Universe** is the signature view: the learner's skill graph as
 an explorable 3D galaxy. It is a second projection of the same `GraphModel`

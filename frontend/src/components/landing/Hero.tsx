@@ -49,7 +49,7 @@ export function Hero() {
 
           <div className="mt-10 flex flex-wrap items-center gap-3">
             <Link
-              href="/dashboard"
+              href="/signup"
               className="group flex items-center gap-2.5 border border-cyan/50 bg-cyan/10 px-6 py-3 text-[13px] font-medium tracking-wide text-cyan transition-all hover:bg-cyan/20 hover:shadow-glow"
             >
               ENTER THE UNIVERSE

@@ -22,26 +22,48 @@
   --font-sans: var(--font-body), ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-display: var(--font-heading), var(--font-body), ui-sans-serif, system-ui, sans-serif;
 
+  /* Colours are stored as CHANNEL TRIPLETS, not hex.
+     Tailwind composes alpha as `rgb(var(--x-rgb) / <alpha-value>)`, which it
+     cannot do with a hex inside a variable — every `border-cyan/40` silently
+     fell back to a default colour until this changed. The `--x` aliases below
+     keep plain `var(--cyan)` valid for hand-written CSS and inline styles. */
+
   /* surfaces — obsidian through graphite */
-  --void: #070a0d;
-  --panel: #0d1217;
-  --panel-2: #131a21;
-  --panel-3: #1a232c;
-  --line: #1e2830;
-  --line-strong: #2a3742;
+  --void-rgb: 7 10 13;
+  --panel-rgb: 13 18 23;
+  --panel-2-rgb: 19 26 33;
+  --panel-3-rgb: 26 35 44;
+  --line-rgb: 30 40 48;
+  --line-strong-rgb: 42 55 66;
 
   /* signal colours */
-  --cyan: #29e6d1;
-  --cyan-dim: #178f83;
-  --teal: #0f8f87;
-  --amber: #ffb84a;
-  --coral: #ff6b6b;
-  --steel: #607080;
+  --cyan-rgb: 41 230 209;
+  --cyan-dim-rgb: 23 143 131;
+  --teal-rgb: 15 143 135;
+  --amber-rgb: 255 184 74;
+  --coral-rgb: 255 107 107;
+  --steel-rgb: 96 112 128;
 
   /* type */
-  --text: #f4f7f7;
-  --text-2: #9aa8b2;
-  --text-3: #53616b;
+  --text-rgb: 244 247 247;
+  --text-2-rgb: 154 168 178;
+  --text-3-rgb: 83 97 107;
+
+  --void: rgb(var(--void-rgb));
+  --panel: rgb(var(--panel-rgb));
+  --panel-2: rgb(var(--panel-2-rgb));
+  --panel-3: rgb(var(--panel-3-rgb));
+  --line: rgb(var(--line-rgb));
+  --line-strong: rgb(var(--line-strong-rgb));
+  --cyan: rgb(var(--cyan-rgb));
+  --cyan-dim: rgb(var(--cyan-dim-rgb));
+  --teal: rgb(var(--teal-rgb));
+  --amber: rgb(var(--amber-rgb));
+  --coral: rgb(var(--coral-rgb));
+  --steel: rgb(var(--steel-rgb));
+  --text: rgb(var(--text-rgb));
+  --text-2: rgb(var(--text-2-rgb));
+  --text-3: rgb(var(--text-3-rgb));
 
   /* mastery states — the graph, the panels and the HUD all read from these */
   --state-mastered: var(--amber);
@@ -57,7 +79,7 @@
   --muted: var(--text-2);
   --fg: var(--text);
   --brand: var(--cyan);
-  --brand-soft: rgba(41, 230, 209, 0.12);
+  --brand-soft: rgb(var(--cyan-rgb) / 0.12);
   --accent: var(--teal);
   --success: var(--amber);
   --warning: var(--cyan);

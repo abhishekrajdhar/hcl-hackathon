@@ -27,7 +27,7 @@ export function CTA() {
             you and it, and shows you the route.
           </p>
           <Link
-            href="/dashboard"
+            href="/signup"
             className="group mt-10 inline-flex items-center gap-2.5 border border-cyan/50 bg-cyan/10 px-7 py-3.5 text-[13px] font-medium tracking-wide text-cyan transition-all hover:bg-cyan/20 hover:shadow-glow"
           >
             ENTER THE UNIVERSE

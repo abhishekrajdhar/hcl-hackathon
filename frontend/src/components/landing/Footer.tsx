@@ -24,8 +24,8 @@ export function Footer() {
           <a href="#showcase" className="label-meta transition-colors hover:text-cyan">
             Interface
           </a>
-          <Link href="/dashboard" className="label-meta transition-colors hover:text-cyan">
-            Launch
+          <Link href="/login" className="label-meta transition-colors hover:text-cyan">
+            Sign in
           </Link>
         </div>
 

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect } from "react";
 import { Shell } from "@/components/dashboard/Shell";
-import { SignIn } from "@/components/dashboard/SignIn";
 import { Overview } from "@/components/dashboard/Overview";
 import { NextAction } from "@/components/dashboard/NextAction";
 import { Roadmap } from "@/components/dashboard/roadmap/Roadmap";
@@ -14,8 +14,8 @@ import { StatusHud } from "@/components/dashboard/StatusHud";
 import { Milestones } from "@/components/dashboard/Milestones";
 import { Recommendations } from "@/components/dashboard/Recommendations";
 import { Assessments } from "@/components/dashboard/Assessments";
-import { LearningActivity } from "@/components/dashboard/LearningActivity";
 import { Assistant } from "@/components/dashboard/Assistant";
+import { SystemStatus } from "@/components/dashboard/SystemStatus";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Toaster } from "@/components/ui/Toaster";
 import { ToastProvider } from "@/lib/hooks/useToast";
@@ -23,10 +23,20 @@ import { ProgressProvider } from "@/lib/progress-context";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { useDashboardData } from "@/lib/hooks/useDashboardData";
 
-export default function DashboardPage() {
-  const { user, ready, signIn, signOut } = useAuth();
+function DashboardView() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { user, ready, signOut } = useAuth();
   const { data, loading, isDemo, reload, applyAdaptive } = useDashboardData();
-  const [demoMode, setDemoMode] = useState(false);
+  // ?demo=1 lets the login page hand someone straight into the bundled dataset
+  // without an account.
+  const demoMode = searchParams.get("demo") === "1";
+
+  // Signing in is its own route, so an unauthenticated visitor is sent there
+  // rather than shown a form wearing the dashboard's chrome.
+  useEffect(() => {
+    if (ready && !user && !demoMode) router.replace("/login");
+  }, [ready, user, demoMode, router]);
 
   if (!ready) {
     return (
@@ -42,17 +52,9 @@ export default function DashboardPage() {
     );
   }
 
-  if (!user && !demoMode) {
-    return (
-      <SignIn
-        onSignIn={async (e, p) => {
-          await signIn(e, p);
-          reload();
-        }}
-        onDemo={() => setDemoMode(true)}
-      />
-    );
-  }
+  // The redirect above is in flight; render nothing rather than a flash of
+  // dashboard chrome for someone who is not signed in.
+  if (!user && !demoMode) return null;
 
   return (
     <ToastProvider>
@@ -68,7 +70,7 @@ export default function DashboardPage() {
           isDemo={isDemo}
           onSignOut={() => {
             signOut();
-            setDemoMode(false);
+            router.replace("/login");
           }}
           hud={<StatusHud data={data} />}
         >
@@ -112,13 +114,8 @@ export default function DashboardPage() {
               <Recommendations data={data} />
             </div>
 
-            <div className="grid gap-4 lg:grid-cols-2">
-              <div id="assessments" className="scroll-mt-16">
-                <Assessments data={data} />
-              </div>
-              <div id="activity" className="scroll-mt-16">
-                <LearningActivity data={data} />
-              </div>
+            <div id="assessments" className="scroll-mt-16">
+              <Assessments data={data} />
             </div>
 
             <div id="assistant" className="scroll-mt-16">
@@ -133,11 +130,36 @@ export default function DashboardPage() {
               />
             </div>
 
+            <div id="system" className="scroll-mt-16">
+              <SystemStatus />
+            </div>
+
             {loading && <p className="py-2 text-center text-xs text-muted">Refreshing your data…</p>}
           </div>
         </Shell>
         <Toaster />
       </ProgressProvider>
     </ToastProvider>
+  );
+}
+
+/**
+ * `useSearchParams` (used for ?demo=1) opts the tree out of static rendering,
+ * so the view sits behind a Suspense boundary and the route still prerenders
+ * its shell.
+ */
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={<DashboardBoot />}>
+      <DashboardView />
+    </Suspense>
+  );
+}
+
+function DashboardBoot() {
+  return (
+    <div className="grid min-h-screen place-items-center bg-void">
+      <p className="label-meta animate-pulse">Initialising universe…</p>
+    </div>
   );
 }

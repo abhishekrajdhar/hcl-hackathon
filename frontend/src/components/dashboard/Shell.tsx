@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { clsx } from "@/lib/cn";
 import {
-  IconActivity,
   IconBook,
+  IconActivity,
   IconChart,
   IconChat,
   IconClipboard,
@@ -29,8 +29,8 @@ const NAV = [
   { id: "milestones", label: "Milestones", icon: IconFlag },
   { id: "recommendations", label: "Recommended", icon: IconBook },
   { id: "assessments", label: "Assessments", icon: IconClipboard },
-  { id: "activity", label: "Activity", icon: IconActivity },
   { id: "assistant", label: "AI Coach", icon: IconChat },
+  { id: "system", label: "System", icon: IconActivity },
 ];
 
 /**

@@ -353,7 +353,15 @@ export interface AdaptiveUpdateResponse {
   next_recommended_action: string;
 }
 
-export type FeedbackSignal = "up" | "down" | "too_easy" | "too_hard";
+// Mirrors the backend FeedbackSignal enum exactly — "irrelevant" and "loved"
+// were missing here, so those two signals could never be sent from the UI.
+export type FeedbackSignal =
+  | "up"
+  | "down"
+  | "too_easy"
+  | "too_hard"
+  | "irrelevant"
+  | "loved";
 
 export type FeedbackTargetType =
   | "resource"
@@ -438,4 +446,94 @@ export interface SkillDependencyAnalysis {
   levels: SkillSummary[][];
   learning_sequence: SkillSummary[];
   unlocks: SkillSummary[];
+}
+
+// ---- catalogue, assessments and health -------------------------------------
+
+export interface GoalRead {
+  id: UUID;
+  user_id: UUID;
+  title: string;
+  description: string | null;
+  status: string;
+  target_date: string | null;
+}
+
+export interface ResourceRead {
+  id: UUID;
+  title: string;
+  description: string | null;
+  url: string | null;
+  provider: string | null;
+  resource_type: string;
+  difficulty: number;
+  estimated_hours: number | null;
+  quality_score: number | null;
+  rating: number | null;
+  is_active: boolean;
+}
+
+export interface AssessmentRead {
+  id: UUID;
+  title: string;
+  description: string | null;
+  assessment_type: string;
+  skill_id: UUID | null;
+  passing_score: number;
+  question_count?: number;
+}
+
+export interface AssessmentQuestionRead {
+  id: UUID;
+  assessment_id: UUID;
+  stem: string;
+  question_type: string;
+  options: { id: string; text: string }[];
+  points: number;
+  order_index: number;
+  skill_id: UUID | null;
+}
+
+export interface AssessmentAnswer {
+  question_id: UUID;
+  response: unknown;
+  time_spent_ms?: number;
+}
+
+export interface AssessmentResultRead {
+  id: UUID;
+  user_id: UUID;
+  assessment_id: UUID;
+  score: number;
+  max_score: number;
+  percentage: number;
+  passed: boolean;
+  submitted_at: string | null;
+  responses: Record<string, unknown>[];
+}
+
+export interface PendingReview {
+  result_id: UUID;
+  assessment_id: UUID;
+  user_id: UUID;
+  submitted_at: string | null;
+  question_id: UUID;
+  prompt: string;
+  response: unknown;
+  points_possible: number;
+}
+
+export interface HealthComponent {
+  status: string;
+  detail: string | null;
+  latency_ms: number | null;
+}
+
+export interface HealthReport {
+  status: string;
+  app: string;
+  version: string;
+  environment: string;
+  uptime_seconds: number;
+  components: Record<string, HealthComponent>;
 }

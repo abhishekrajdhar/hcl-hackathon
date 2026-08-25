@@ -55,13 +55,13 @@ export function LandingNav() {
 
         <div className="flex items-center gap-3">
           <Link
-            href="/dashboard"
+            href="/login"
             className="label-meta hidden transition-colors hover:text-cyan sm:inline"
           >
             Sign in
           </Link>
           <Link
-            href="/dashboard"
+            href="/signup"
             className="border border-cyan/50 bg-cyan/10 px-4 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-cyan transition-all hover:bg-cyan/20 hover:shadow-glow"
           >
             Launch

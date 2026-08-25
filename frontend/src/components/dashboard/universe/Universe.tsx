@@ -18,6 +18,7 @@ import { titleCase } from "@/lib/format";
 import { useKnowledgeGraph } from "@/lib/hooks/useKnowledgeGraph";
 import { SkillDetailPanel } from "@/components/dashboard/graph/SkillDetailPanel";
 import { CoachDock } from "@/components/dashboard/universe/CoachDock";
+import { SceneBoundary } from "@/components/dashboard/universe/SceneBoundary";
 
 /** Fired by the Assistant when a coach reply lands; detail is the reply text. */
 export const COACH_REPLY_EVENT = "coach:reply";
@@ -44,6 +45,9 @@ export function Universe({ data }: { data: DashboardData }) {
     () => graph.nodes.find((n) => n.id === selectedId) ?? null,
     [graph.nodes, selectedId],
   );
+
+  // Once the galaxy has nodes, keep it on screen through subsequent refreshes.
+  const hasWorld = graph.nodes.length > 0;
 
   const counts = useMemo(() => {
     const c: Record<MasteryState, number> = { mastered: 0, learning: 0, weak: 0, not_started: 0 };
@@ -79,17 +83,28 @@ export function Universe({ data }: { data: DashboardData }) {
     <section className="relative h-[calc(100vh-3rem)] min-h-[620px] w-full overflow-hidden">
       {/* --- the world ---------------------------------------------------- */}
       <div className="absolute inset-0">
-        {loading ? (
-          <div className="grid h-full place-items-center">
-            <p className="label-meta animate-pulse">Charting your universe…</p>
-          </div>
+        {/* The canvas stays mounted once there is a world to show. Swapping it
+            for a placeholder on every refresh tore down the WebGL context and
+            rebuilt it — which R3F cannot always survive, because it connects
+            its DOM events to the canvas wrapper and that ref is briefly null
+            across an unmount/remount (the "null (reading 'addEventListener')"
+            crash after marking a resource complete). It also made the whole
+            world blink on every reload. */}
+        {hasWorld ? (
+          <SceneBoundary>
+            <GalaxyScene
+              model={graph}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+              pulseIds={pulseIds}
+            />
+          </SceneBoundary>
         ) : (
-          <GalaxyScene
-            model={graph}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-            pulseIds={pulseIds}
-          />
+          <div className="grid h-full place-items-center">
+            <p className="label-meta animate-pulse">
+              {loading ? "Charting your universe…" : "No skills charted yet."}
+            </p>
+          </div>
         )}
       </div>
 
@@ -166,7 +181,7 @@ export function Universe({ data }: { data: DashboardData }) {
         <CoachDock data={data} onFocusSkill={(name) => focusByName(graph.nodes, name, setSelectedId)} />
       </div>
 
-      {isDemo && !loading && (
+      {isDemo && hasWorld && (
         <span className="label-meta pointer-events-none absolute right-6 top-[calc(100%-2.2rem)] hidden text-amber lg:block">
           demo universe
         </span>

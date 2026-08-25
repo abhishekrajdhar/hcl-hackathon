@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { Badge } from "@/components/ui/Badge";
+import { Portal } from "@/components/ui/Portal";
 import { Button } from "@/components/ui/Button";
 import {
   IconArrow,
@@ -52,8 +53,9 @@ export function ResourceModal({
   const locked = resource.status === "locked";
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+    <Portal>
+      <div
+        className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 backdrop-blur-sm sm:items-center sm:p-4"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
@@ -211,7 +213,8 @@ export function ResourceModal({
           )}
         </div>
       </div>
-    </div>
+      </div>
+    </Portal>
   );
 }
 
