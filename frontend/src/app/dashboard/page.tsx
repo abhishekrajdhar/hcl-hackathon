@@ -9,6 +9,7 @@ import { Roadmap } from "@/components/dashboard/roadmap/Roadmap";
 import { LearningPath } from "@/components/dashboard/LearningPath";
 import { SkillProgress } from "@/components/dashboard/SkillProgress";
 import { KnowledgeGraph } from "@/components/dashboard/graph/KnowledgeGraph";
+import { Universe } from "@/components/dashboard/universe/Universe";
 import { Milestones } from "@/components/dashboard/Milestones";
 import { Recommendations } from "@/components/dashboard/Recommendations";
 import { Assessments } from "@/components/dashboard/Assessments";
@@ -76,6 +77,10 @@ export default function DashboardPage() {
           <div className="space-y-5">
             <div id="overview">
               <Overview data={data} />
+            </div>
+
+            <div id="universe" className="scroll-mt-6">
+              <Universe data={data} />
             </div>
             <div id="next-action">
               <NextAction data={data} />

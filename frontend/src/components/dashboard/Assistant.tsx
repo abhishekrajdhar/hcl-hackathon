@@ -8,6 +8,7 @@ import { clsx } from "@/lib/cn";
 import { useChat, type ChatMessage } from "@/lib/hooks/useChat";
 import { useVoiceCoach } from "@/lib/hooks/useVoiceCoach";
 import { ToolCards } from "@/components/dashboard/chat/ToolCards";
+import { COACH_REPLY_EVENT } from "@/components/dashboard/universe/Universe";
 import { VoiceControls } from "@/components/dashboard/chat/VoiceControls";
 
 const SUGGESTIONS = [
@@ -62,6 +63,17 @@ export function Assistant({
     spokenRef.current = last.id;
     speakReply(last.content);
   }, [messages, voiceMode, voiceReplies, speakReply]);
+
+  // Broadcast each reply so the Learning Universe can point at the skills the
+  // mentor names. Fire-and-forget: nothing here depends on who is listening.
+  const broadcastRef = useRef<string | null>(null);
+  useEffect(() => {
+    const last = messages[messages.length - 1];
+    if (!last || last.role !== "assistant" || last.id === "welcome" || last.error) return;
+    if (broadcastRef.current === last.id) return;
+    broadcastRef.current = last.id;
+    window.dispatchEvent(new CustomEvent(COACH_REPLY_EVENT, { detail: { text: last.content } }));
+  }, [messages]);
 
   const submit = (value?: string) => {
     const v = value ?? text;

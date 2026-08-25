@@ -1,8 +1,20 @@
-// Fixed animated gradient blobs behind the whole page. Purely decorative.
+"use client";
+
+import dynamic from "next/dynamic";
+
+// WebGL only exists in the browser; the blobs and grid render either way.
+const Starfield = dynamic(
+  () => import("./Starfield").then((m) => m.Starfield),
+  { ssr: false },
+);
+
+// Fixed animated gradient blobs + a live 3D starfield behind the whole page —
+// the first hint of the Learning Universe the dashboard opens into.
 export function Backdrop() {
   return (
     <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
       <div className="absolute inset-0 bg-bg" />
+      <Starfield />
       <div className="animate-blob absolute -left-32 -top-24 h-[36rem] w-[36rem] rounded-full bg-brand/25 blur-[100px]" />
       <div
         className="animate-blob absolute -right-32 top-40 h-[32rem] w-[32rem] rounded-full bg-accent/25 blur-[100px]"

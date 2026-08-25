@@ -44,7 +44,9 @@ export function Reveal({
   style,
 }: {
   children: ReactNode;
-  as?: ElementType;
+  /** Narrowed to HTML tags: with @react-three/fiber's JSX augmentation loaded,
+   *  a bare ElementType no longer type-checks for common DOM props. */
+  as?: "div" | "section" | "span" | "article" | "aside" | "header" | "footer" | "li";
   delay?: number;
   className?: string;
   style?: CSSProperties;
@@ -52,7 +54,10 @@ export function Reveal({
   const { ref, inView } = useInView<HTMLElement>();
   return (
     <Tag
-      ref={ref}
+      // Callback form: contravariant, so it satisfies every tag in the union.
+      ref={(el: HTMLElement | null) => {
+        ref.current = el;
+      }}
       className={clsx("reveal", inView && "in", className)}
       style={{ ["--reveal-delay" as string]: `${delay}ms`, ...style }}
     >

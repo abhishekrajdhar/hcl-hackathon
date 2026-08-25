@@ -6,6 +6,7 @@ import { IconLogout, IconTarget, IconPath, IconChart, IconFlag, IconBook, IconCl
 
 const NAV = [
   { id: "overview", label: "Overview", icon: IconTarget },
+  { id: "universe", label: "Learning Universe", icon: IconSpark },
   { id: "next-action", label: "Next Action", icon: IconSpark },
   { id: "roadmap", label: "Roadmap", icon: IconLayers },
   { id: "path", label: "Learning Path", icon: IconPath },

@@ -58,7 +58,7 @@ PostgreSQL 16 + pgvector · Alembic · Redis (provisioned, unused until the
 caching phase) · Docker Compose
 
 **Frontend** — Next.js 15 (App Router) · React 19 · TypeScript · Tailwind ·
-Recharts
+Recharts · Three.js (react-three-fiber) for the Learning Universe
 
 **Models** — LLM provider is `mock | claude | openai`, embeddings are
 `mock | sentence_transformer`, both chosen from settings and never hard-coded in
@@ -350,6 +350,7 @@ ever opened.
         └── lib/
             ├── api/             # typed endpoint layer over one fetch client
             ├── voice/           # browser speech-to-text and text-to-speech
+            ├── universe-layout.ts # pure 3D projection of the graph model
             ├── hooks/           # auth, chat, voice, dashboard data, theme, toast
             └── derive.ts        # API response → dashboard view model
 ```
@@ -417,9 +418,30 @@ the repository level.
 
 ## Frontend
 
-A landing page and a signed-in dashboard with eleven tabs — Overview, Next
-Action, Roadmap, Learning Path, Skill Progress, Knowledge Graph, Milestones,
-Recommended, Assessments, Activity, AI Assistant.
+A landing page (with a live 3D starfield backdrop) and a signed-in dashboard
+with twelve tabs — Overview, Learning Universe, Next Action, Roadmap, Learning
+Path, Skill Progress, Knowledge Graph, Milestones, Recommended, Assessments,
+Activity, AI Assistant.
+
+The **Learning Universe** is the signature view: the learner's skill graph as
+an explorable 3D galaxy. It is a second projection of the same `GraphModel`
+the 2D knowledge graph renders — one source of truth, two views. Prerequisite
+rank becomes altitude (foundations at the bottom, the goal overhead, so
+learning literally reads as ascending), each rank's skills sit on a ring
+ordered by the same barycentre pass as the 2D layout, and mastery is the
+visual language: mastered skills burn green, learning amber, weak red, and
+everything the learner has not started sits dim and translucent in the
+*knowledge fog*, waiting to be discovered. Goal skills are ringed landmarks.
+Selecting a star lights its full prerequisite route, eases the camera to it,
+and opens the same grounded detail panel as the 2D view.
+
+The AI mentor drives the universe: every coach reply is broadcast, and when it
+names a skill that exists in the galaxy, that star is selected and pulsed — so
+"can I ask how comfortable you are with Linear Algebra?" physically points at
+Linear Algebra. The 3D layer is a projection of the underlying engines, not a
+decoration: nothing appears in the galaxy that the graph and profile data did
+not put there. WebGL loads lazily (`next/dynamic`, no SSR), so the three.js
+bundle stays out of the first paint.
 
 The **Knowledge Graph** tab draws the prerequisite DAG itself: a layered
 top-to-bottom layout where a skill never appears above something it depends on,
