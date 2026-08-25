@@ -3,61 +3,75 @@
 @tailwind utilities;
 
 :root {
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  /* light palette */
-  --bg: #f6f7fb;
-  --surface: #ffffff;
-  --surface-2: #f2f4f8;
-  --border: #e5e8ef;
-  --muted: #6b7280;
-  --fg: #111827;
-  --brand: #6d28d9;
-  --brand-soft: #ede9fe;
-  --accent: #0ea5e9;
-  --success: #16a34a;
-  --warning: #d97706;
-  --danger: #dc2626;
-}
+  /* ---------------------------------------------------------------------
+     LEARNING UNIVERSE — design tokens
+     ---------------------------------------------------------------------
+     One dark, cinematic world. Colour is information, not decoration:
+     roughly 70% obsidian/graphite, 20% cyan/teal, 7% amber, 3% coral.
 
-:root[data-theme="dark"],
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #0b0d12;
-    --surface: #141821;
-    --surface-2: #1b202b;
-    --border: #262c39;
-    --muted: #9aa4b2;
-    --fg: #e8eaf0;
-    --brand: #8b5cf6;
-    --brand-soft: #241b3d;
-    --accent: #38bdf8;
-    --success: #22c55e;
-    --warning: #f59e0b;
-    --danger: #f87171;
-  }
-}
-:root[data-theme="dark"] {
-  --bg: #0b0d12;
-  --surface: #141821;
-  --surface-2: #1b202b;
-  --border: #262c39;
-  --muted: #9aa4b2;
-  --fg: #e8eaf0;
-  --brand: #8b5cf6;
-  --brand-soft: #241b3d;
-  --accent: #38bdf8;
-  --success: #22c55e;
-  --warning: #f59e0b;
-  --danger: #f87171;
+       cyan   active / currently learning / interactive
+       teal   available / healthy / secondary structure
+       amber  mastered / achievement / milestone
+       coral  weak / needs attention
+       steel  locked / undiscovered / fog
+
+     Legacy semantic names (brand/accent/success/...) are aliased onto this
+     palette at the bottom so every existing component adopts the new world
+     without being rewritten.
+  --------------------------------------------------------------------- */
+  --font-sans: var(--font-body), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-display: var(--font-heading), var(--font-body), ui-sans-serif, system-ui, sans-serif;
+
+  /* surfaces — obsidian through graphite */
+  --void: #070a0d;
+  --panel: #0d1217;
+  --panel-2: #131a21;
+  --panel-3: #1a232c;
+  --line: #1e2830;
+  --line-strong: #2a3742;
+
+  /* signal colours */
+  --cyan: #29e6d1;
+  --cyan-dim: #178f83;
+  --teal: #0f8f87;
+  --amber: #ffb84a;
+  --coral: #ff6b6b;
+  --steel: #607080;
+
+  /* type */
+  --text: #f4f7f7;
+  --text-2: #9aa8b2;
+  --text-3: #53616b;
+
+  /* mastery states — the graph, the panels and the HUD all read from these */
+  --state-mastered: var(--amber);
+  --state-active: var(--cyan);
+  --state-weak: var(--coral);
+  --state-locked: var(--steel);
+
+  /* --- legacy aliases -------------------------------------------------- */
+  --bg: var(--void);
+  --surface: var(--panel);
+  --surface-2: var(--panel-2);
+  --border: var(--line);
+  --muted: var(--text-2);
+  --fg: var(--text);
+  --brand: var(--cyan);
+  --brand-soft: rgba(41, 230, 209, 0.12);
+  --accent: var(--teal);
+  --success: var(--amber);
+  --warning: var(--cyan);
+  --danger: var(--coral);
 }
 
 * { box-sizing: border-box; }
 html, body { padding: 0; margin: 0; }
 body {
-  background: var(--bg);
-  color: var(--fg);
+  background: var(--void);
+  color: var(--text);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 @keyframes shimmer { 100% { transform: translateX(100%); } }
@@ -101,7 +115,7 @@ body {
 /* animated gradient text */
 @keyframes gradient-pan { to { background-position: 200% center; } }
 .text-gradient {
-  background: linear-gradient(100deg, var(--brand), var(--accent), var(--brand));
+  background: linear-gradient(100deg, var(--cyan), #7ff5e6, var(--teal), var(--cyan));
   background-size: 200% auto;
   -webkit-background-clip: text;
   background-clip: text;
@@ -152,9 +166,9 @@ body {
 
 /* soft pulse */
 @keyframes pulse-ring {
-  0% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.35); }
-  70% { box-shadow: 0 0 0 16px rgba(139, 92, 246, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0); }
+  0% { box-shadow: 0 0 0 0 rgba(41, 230, 209, 0.30); }
+  70% { box-shadow: 0 0 0 16px rgba(41, 230, 209, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(41, 230, 209, 0); }
 }
 .animate-pulse-ring { animation: pulse-ring 2.6s ease-out infinite; }
 
@@ -168,4 +182,138 @@ body {
   .reveal { opacity: 1; transform: none; transition: none; }
   .text-gradient, .animate-float, .animate-float-slow, .animate-orbit,
   .animate-blob, .marquee-track, .animate-spin-slow, .animate-pulse-ring { animation: none; }
+}
+
+/* ===========================================================================
+   HUD LAYER
+   The interface reads as instrumentation floating over a world, not as a
+   stack of cards: hairline edges, corner brackets, uppercase metadata, and
+   light that comes from the content rather than from a drop shadow.
+   ======================================================================== */
+
+/* A floating instrument panel. Deliberately low-radius — a game HUD reads as
+   machined, not as a rounded SaaS card. */
+.hud {
+  position: relative;
+  background: color-mix(in srgb, var(--panel) 82%, transparent);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  backdrop-filter: blur(14px) saturate(1.1);
+  -webkit-backdrop-filter: blur(14px) saturate(1.1);
+}
+/* Corner brackets: the single strongest "instrument" cue, and cheaper than
+   a border-image. Drawn on ::before/::after so no extra DOM is needed. */
+.hud-bracket::before,
+.hud-bracket::after {
+  content: "";
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-color: var(--cyan);
+  opacity: 0.55;
+  pointer-events: none;
+}
+.hud-bracket::before {
+  top: -1px; left: -1px;
+  border-top: 1px solid; border-left: 1px solid;
+}
+.hud-bracket::after {
+  bottom: -1px; right: -1px;
+  border-bottom: 1px solid; border-right: 1px solid;
+}
+
+/* Raised instrument — used for the active/selected panel. */
+.hud-raised {
+  background: color-mix(in srgb, var(--panel-2) 88%, transparent);
+  border-color: var(--line-strong);
+  box-shadow: 0 0 0 1px rgba(41, 230, 209, 0.06), 0 24px 60px -30px rgba(0, 0, 0, 0.9);
+}
+
+/* Metadata label: small, uppercase, generously tracked. */
+.label-meta {
+  font-size: 10px;
+  line-height: 1;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  font-weight: 500;
+}
+
+/* Cinematic heading. */
+.display {
+  font-family: var(--font-display);
+  letter-spacing: -0.03em;
+  line-height: 1.02;
+}
+
+/* Numeric readouts line up in a HUD. */
+.readout { font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+
+/* Hairline divider that fades at both ends, like an instrument rule. */
+.hud-rule {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--line-strong), transparent);
+}
+
+/* --- world backdrop ------------------------------------------------------ */
+/* Depth without distraction: one distant nebula wash + a fine grid that fades
+   out toward the edges. No stars here — those are real geometry in the 3D
+   scene, so the CSS layer stays quiet underneath it. */
+.world-backdrop {
+  background:
+    radial-gradient(ellipse 80% 55% at 50% 0%, rgba(15, 143, 135, 0.10), transparent 70%),
+    radial-gradient(ellipse 60% 50% at 85% 90%, rgba(41, 230, 209, 0.06), transparent 70%),
+    var(--void);
+}
+.world-grid {
+  background-image:
+    linear-gradient(var(--line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size: 64px 64px;
+  opacity: 0.35;
+  -webkit-mask-image: radial-gradient(ellipse at center, #000 10%, transparent 72%);
+  mask-image: radial-gradient(ellipse at center, #000 10%, transparent 72%);
+}
+
+/* --- energy ------------------------------------------------------------- */
+/* A prerequisite path carrying charge. Used for 2D chain rendering; the 3D
+   scene animates real particles along its own curves. */
+@keyframes energy-flow { to { background-position: 200% 0; } }
+.energy-line {
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%, var(--cyan) 35%, #ffffff 50%, var(--cyan) 65%, transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: energy-flow 2.4s linear infinite;
+}
+
+/* Slow breathing glow for an active node's aura. */
+@keyframes aura {
+  0%, 100% { opacity: 0.35; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.06); }
+}
+.animate-aura { animation: aura 3.6s ease-in-out infinite; }
+
+/* Attention pulse for a weak skill — slow, not alarming. */
+@keyframes warn-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.28); }
+  60% { box-shadow: 0 0 0 10px rgba(255, 107, 107, 0); }
+}
+.animate-warn { animation: warn-pulse 3s ease-out infinite; }
+
+/* Achievement moment: a single elegant expansion, not confetti. */
+@keyframes ach-in {
+  0% { opacity: 0; transform: translateY(10px) scale(0.96); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+.animate-achievement { animation: ach-in 0.5s cubic-bezier(0.22, 1, 0.36, 1); }
+
+/* Nav rail label reveal. */
+@keyframes rail-label { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: translateX(0); } }
+.animate-rail-label { animation: rail-label 0.18s ease-out; }
+
+@media (prefers-reduced-motion: reduce) {
+  .energy-line, .animate-aura, .animate-warn, .animate-achievement,
+  .animate-rail-label { animation: none; }
 }

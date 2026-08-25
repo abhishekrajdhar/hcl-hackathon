@@ -1,58 +1,63 @@
+"use client";
+
 import { Reveal } from "@/components/landing/motion";
 
-const STEPS = [
+/** The pipeline, drawn as a signal chain rather than four marketing steps. */
+const STAGES = [
   {
-    n: "01",
-    title: "Tell us your goal",
-    body: "“I want to become an NLP engineer.” The AI coach extracts the role, your experience, and your weekly time.",
+    id: "IN",
+    title: "You describe the goal",
+    body: "Out loud or typed. A time budget and the skills you already have are pulled from the same sentence.",
   },
   {
-    n: "02",
-    title: "We map your skills",
-    body: "Your current proficiency is placed on a graph of prerequisites and scored against what the goal actually requires.",
+    id: "01",
+    title: "Position is located",
+    body: "Your proficiencies are placed against the prerequisite graph to find exactly where you stand in it.",
   },
   {
-    n: "03",
-    title: "Get an adaptive roadmap",
-    body: "A phased plan appears — milestones, resources, projects and checkpoints — sequenced so nothing is out of order.",
+    id: "02",
+    title: "Route is computed",
+    body: "The gap engine orders what is missing; the path generator phases it into a schedule that fits your week.",
   },
   {
-    n: "04",
-    title: "Learn — it adapts",
-    body: "Every completion and assessment updates your skills, unlocks what's next, and re-tunes recommendations automatically.",
+    id: "03",
+    title: "Evidence re-routes it",
+    body: "Every assessment and completion moves your position, and the route is recomputed around the new one.",
+  },
+  {
+    id: "OUT",
+    title: "The world redraws",
+    body: "Nodes light, paths open, fog recedes. What you see is the state of the engine, not an illustration of it.",
   },
 ];
 
 export function HowItWorks() {
   return (
-    <section id="how" className="relative py-20 sm:py-28">
-      <div className="mx-auto max-w-6xl px-4 lg:px-6">
-        <div className="mx-auto max-w-2xl text-center">
-          <Reveal>
-            <span className="text-xs font-semibold uppercase tracking-widest text-brand">How it works</span>
-          </Reveal>
-          <Reveal delay={80}>
-            <h2 className="mt-3 text-3xl font-extrabold tracking-tight sm:text-4xl">
-              From a sentence to a <span className="text-gradient">self-updating plan</span>
-            </h2>
-          </Reveal>
-        </div>
+    <section id="pipeline" className="relative border-t border-line py-24 lg:py-32">
+      <div className="mx-auto max-w-[1400px] px-6 lg:px-12">
+        <Reveal>
+          <p className="label-meta text-cyan">The pipeline</p>
+          <h2 className="display mt-4 max-w-2xl text-3xl font-semibold leading-tight lg:text-[42px]">
+            A closed loop, not a course list.
+          </h2>
+        </Reveal>
 
-        <div className="relative mt-16">
-          {/* connecting line */}
-          <div className="absolute left-0 right-0 top-7 hidden h-px bg-gradient-to-r from-transparent via-border to-transparent lg:block" />
-          <div className="grid gap-8 lg:grid-cols-4">
-            {STEPS.map((s, i) => (
-              <Reveal key={s.n} delay={i * 120} className="relative text-center lg:text-left">
-                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-border bg-surface text-lg font-bold text-brand shadow-card lg:mx-0">
-                  <span className="text-gradient">{s.n}</span>
-                </div>
-                <h3 className="mt-4 text-lg font-semibold">{s.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-muted">{s.body}</p>
-              </Reveal>
-            ))}
-          </div>
-        </div>
+        <ol className="mt-16 space-y-px">
+          {STAGES.map((s, i) => (
+            <Reveal key={s.id} delay={i * 70}>
+              <li className="group relative grid gap-4 border-l border-line py-7 pl-8 transition-colors hover:border-cyan/50 md:grid-cols-[110px_1fr_2fr] md:gap-10">
+                {/* Node on the signal line. */}
+                <span
+                  aria-hidden
+                  className="absolute -left-[4px] top-9 h-[7px] w-[7px] rounded-full bg-line-strong transition-colors group-hover:bg-cyan group-hover:shadow-glow"
+                />
+                <span className="readout display text-[13px] font-semibold text-cyan">{s.id}</span>
+                <h3 className="display text-[19px] font-semibold leading-snug">{s.title}</h3>
+                <p className="max-w-xl text-[13px] leading-relaxed text-text-2">{s.body}</p>
+              </li>
+            </Reveal>
+          ))}
+        </ol>
       </div>
     </section>
   );

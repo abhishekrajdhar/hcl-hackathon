@@ -9,7 +9,7 @@ export function NextAction({ data }: { data: DashboardData }) {
   const next = data.nextAction;
   return (
     <Card className="overflow-hidden">
-      <div className="flex items-center justify-between gap-4 bg-gradient-to-r from-brand/15 to-accent/10 p-5">
+      <div className="relative flex items-center justify-between gap-4 border-l-2 border-cyan p-5">
         <div className="min-w-0">
           <div className="mb-1 flex items-center gap-2 text-xs font-medium text-brand">
             <IconSpark className="h-4 w-4" /> Next action

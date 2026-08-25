@@ -3,17 +3,15 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { clsx } from "@/lib/cn";
-import { useTheme } from "@/lib/hooks/useTheme";
 
 const LINKS = [
-  { label: "Features", href: "#features" },
-  { label: "How it works", href: "#how" },
-  { label: "Showcase", href: "#showcase" },
-  { label: "Testimonials", href: "#testimonials" },
+  { label: "Engine", href: "#engine" },
+  { label: "Pipeline", href: "#pipeline" },
+  { label: "Interface", href: "#showcase" },
 ];
 
+/** Thin instrument bar. Transparent over the world until the page scrolls. */
 export function LandingNav() {
-  const { theme, toggle } = useTheme();
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
 
@@ -27,69 +25,65 @@ export function LandingNav() {
   return (
     <header
       className={clsx(
-        "fixed inset-x-0 top-0 z-50 transition-all duration-300",
-        scrolled ? "border-b border-border bg-bg/70 backdrop-blur-xl" : "border-b border-transparent",
+        "fixed inset-x-0 top-0 z-50 h-14 transition-colors duration-300",
+        scrolled
+          ? "border-b border-line bg-[color-mix(in_srgb,var(--void)_82%,transparent)] backdrop-blur-xl"
+          : "border-b border-transparent",
       )}
     >
-      <nav className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 lg:px-6">
-        <Link href="/" className="group flex items-center gap-2">
-          <span className="grid h-8 w-8 place-items-center rounded-xl bg-gradient-to-br from-brand to-accent text-white shadow-card transition-transform group-hover:rotate-12">
-            ◆
+      <nav className="mx-auto flex h-full max-w-[1400px] items-center justify-between px-6 lg:px-12">
+        <Link href="/" className="flex items-center gap-2.5">
+          <span className="relative grid h-5 w-5 place-items-center">
+            <span className="absolute inset-0 rounded-full border border-cyan/60" />
+            <span className="h-1.5 w-1.5 rounded-full bg-cyan shadow-glow" />
           </span>
-          <span className="text-[15px] font-bold tracking-tight">Pathwise</span>
+          <span className="display text-[13px] font-semibold tracking-tight">PATHWISE</span>
+          <span className="label-meta ml-1 hidden text-text-3 sm:inline">v0.1</span>
         </Link>
 
-        <div className="hidden items-center gap-1 md:flex">
+        <div className="hidden items-center gap-8 md:flex">
           {LINKS.map((l) => (
             <a
               key={l.href}
               href={l.href}
-              className="rounded-lg px-3 py-1.5 text-sm text-muted transition-colors hover:text-fg"
+              className="label-meta transition-colors hover:text-cyan"
             >
               {l.label}
             </a>
           ))}
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={toggle}
-            aria-label="Toggle theme"
-            className="grid h-9 w-9 place-items-center rounded-xl border border-border text-muted transition-colors hover:text-fg"
-          >
-            {theme === "dark" ? "☾" : "☀"}
-          </button>
+        <div className="flex items-center gap-3">
           <Link
             href="/dashboard"
-            className="hidden rounded-xl px-3.5 py-2 text-sm font-medium text-muted transition-colors hover:text-fg sm:block"
+            className="label-meta hidden transition-colors hover:text-cyan sm:inline"
           >
             Sign in
           </Link>
           <Link
             href="/dashboard"
-            className="group relative overflow-hidden rounded-xl bg-gradient-to-r from-brand to-accent px-4 py-2 text-sm font-semibold text-white shadow-card transition-transform hover:scale-[1.03]"
+            className="border border-cyan/50 bg-cyan/10 px-4 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-cyan transition-all hover:bg-cyan/20 hover:shadow-glow"
           >
-            <span className="relative z-10">Get started</span>
-            <span className="absolute inset-0 -translate-x-full bg-white/20 transition-transform duration-500 group-hover:translate-x-full" />
+            Launch
           </Link>
           <button
             onClick={() => setOpen((o) => !o)}
             aria-label="Menu"
-            className="grid h-9 w-9 place-items-center rounded-xl border border-border text-muted md:hidden"
+            className="text-text-2 md:hidden"
           >
-            ☰
+            {open ? "✕" : "☰"}
           </button>
         </div>
       </nav>
 
       {open && (
-        <div className="border-t border-border bg-bg/95 px-4 py-2 backdrop-blur-xl md:hidden">
+        <div className="border-b border-line bg-void/95 px-6 py-4 backdrop-blur-xl md:hidden">
           {LINKS.map((l) => (
             <a
               key={l.href}
               href={l.href}
               onClick={() => setOpen(false)}
-              className="block rounded-lg px-3 py-2 text-sm text-muted hover:text-fg"
+              className="label-meta block py-2.5 hover:text-cyan"
             >
               {l.label}
             </a>

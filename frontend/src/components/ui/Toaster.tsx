@@ -44,7 +44,7 @@ function ToastCard({ toast, onClose }: { toast: Toast; onClose: () => void }) {
           ✕
         </button>
       </div>
-      <div className="h-0.5 w-full bg-brand/70" />
+      <div className="h-px w-full bg-cyan/70" />
     </div>
   );
 }

@@ -9,13 +9,13 @@ export function Showcase() {
   return (
     <section id="showcase" className="relative py-20 sm:py-28">
       <div className="mx-auto max-w-6xl px-4 lg:px-6">
-        <div className="mx-auto max-w-2xl text-center">
+        <div className="max-w-2xl">
           <Reveal>
-            <span className="text-xs font-semibold uppercase tracking-widest text-brand">Live product</span>
+            <span className="label-meta text-cyan">The interface</span>
           </Reveal>
           <Reveal delay={80}>
-            <h2 className="mt-3 text-3xl font-extrabold tracking-tight sm:text-4xl">
-              See it <span className="text-gradient">adapt in real time</span>
+            <h2 className="display mt-4 text-3xl font-semibold leading-tight lg:text-[42px]">
+              You watch the engine think.
             </h2>
           </Reveal>
         </div>
@@ -50,7 +50,7 @@ function Card({ children, className }: { children: React.ReactNode; className?: 
   return (
     <div
       className={clsx(
-        "group relative h-full overflow-hidden rounded-2xl border border-border bg-surface/70 p-5 backdrop-blur transition-colors hover:border-brand/40",
+        "group relative h-full overflow-hidden border border-line bg-panel/70 p-5 backdrop-blur transition-colors hover:border-cyan/40",
         className,
       )}
     >
@@ -79,7 +79,7 @@ function AdaptiveTile() {
           </span>
         </div>
 
-        <div className="rounded-xl border border-border bg-surface-2/50 p-4">
+        <div className="border border-line bg-panel-2/50 p-4">
           <div className="mb-1 flex items-center justify-between text-xs">
             <span className="font-medium">CNN fundamentals</span>
             <span className={clsx("font-semibold transition-colors", after ? "text-success" : "text-muted")}>
@@ -96,7 +96,7 @@ function AdaptiveTile() {
 
         <div
           className={clsx(
-            "mt-3 flex items-start gap-2 rounded-xl border border-brand/25 bg-brand-soft/50 p-3 transition-all duration-500",
+            "mt-3 flex items-start gap-2 border border-cyan/25 bg-cyan/5 p-3 transition-all duration-500",
             after ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0",
           )}
         >
@@ -128,10 +128,10 @@ function CoachTile() {
         <h3 className="text-sm font-semibold">AI coach</h3>
       </div>
       <div className="space-y-2">
-        <div className="ml-auto w-fit max-w-[85%] rounded-2xl rounded-br-sm bg-brand px-3 py-1.5 text-xs text-white">
+        <div className="ml-auto w-fit max-w-[85%] border border-cyan/40 bg-cyan/15 px-3 py-1.5 text-xs text-cyan">
           What should I learn next?
         </div>
-        <div className="w-fit max-w-[90%] rounded-2xl rounded-bl-sm bg-surface-2 px-3 py-1.5 text-xs">
+        <div className="w-fit max-w-[90%] border border-line bg-panel-2 px-3 py-1.5 text-xs">
           Start <b>PyTorch Fundamentals</b> — it closes your biggest gap and you meet every prerequisite.
         </div>
         <div className="flex gap-1">
@@ -185,7 +185,7 @@ function RoadmapTile() {
             <div className="flex flex-col items-center gap-1.5 text-center">
               <span
                 className={clsx(
-                  "grid h-8 w-8 place-items-center rounded-xl border-2 text-[11px] font-bold",
+                  "grid h-8 w-8 place-items-center border text-[11px] font-semibold",
                   p.s === "done"
                     ? "border-success bg-success text-white"
                     : p.s === "current"

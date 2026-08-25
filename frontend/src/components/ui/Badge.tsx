@@ -2,13 +2,18 @@ import { clsx } from "@/lib/cn";
 
 type Tone = "neutral" | "brand" | "success" | "warning" | "danger" | "accent";
 
+/**
+ * A status tag: hairline outline, uppercase, tracked. Tones map onto the
+ * world's colour semantics — `success` is an achievement (amber), `warning`
+ * is active learning (cyan), `danger` needs attention (coral).
+ */
 const tones: Record<Tone, string> = {
-  neutral: "bg-surface-2 text-muted border-border",
-  brand: "bg-brand-soft text-brand border-transparent",
-  success: "bg-success/10 text-success border-transparent",
-  warning: "bg-warning/10 text-warning border-transparent",
-  danger: "bg-danger/10 text-danger border-transparent",
-  accent: "bg-accent/10 text-accent border-transparent",
+  neutral: "border-line-strong text-text-2",
+  brand: "border-cyan/40 text-cyan",
+  success: "border-amber/40 text-amber",
+  warning: "border-cyan/40 text-cyan",
+  danger: "border-coral/40 text-coral",
+  accent: "border-teal/50 text-teal",
 };
 
 export function Badge({
@@ -23,7 +28,7 @@ export function Badge({
   return (
     <span
       className={clsx(
-        "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium capitalize",
+        "inline-flex items-center gap-1 rounded-sm border px-1.5 py-[3px] text-[10px] font-medium uppercase leading-none tracking-[0.1em]",
         tones[tone],
         className,
       )}

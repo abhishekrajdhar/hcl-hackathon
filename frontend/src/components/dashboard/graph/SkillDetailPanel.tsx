@@ -35,9 +35,10 @@ const TONE: Record<MasteryState, "success" | "warning" | "danger" | "neutral"> =
 export function SkillDetailPanel({
   skill,
   model,
-  proficiencies,
+  proficiencies = [],
   isDemo,
   onSelect,
+  bare = false,
 }: {
   skill: GraphNode | null;
   model: GraphModel;
@@ -46,9 +47,11 @@ export function SkillDetailPanel({
    * sit outside the drawn graph, and their state has to come from here — the
    * panel must not assume "not started" for a skill it simply hasn't drawn.
    */
-  proficiencies: GraphProficiency[];
+  proficiencies?: GraphProficiency[];
   isDemo: boolean;
   onSelect: (id: string) => void;
+  /** True when the caller already provides the panel chrome (the HUD frame). */
+  bare?: boolean;
 }) {
   // The graph only holds the part of the catalogue on this learner's route, so
   // "what does this unlock" is asked of the backend, which sees all of it.
@@ -96,7 +99,12 @@ export function SkillDetailPanel({
 
   if (!skill) {
     return (
-      <div className="flex h-full min-h-[220px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border p-6 text-center">
+      <div
+        className={clsx(
+          "flex h-full min-h-[220px] flex-col items-center justify-center gap-2 p-6 text-center",
+          !bare && "rounded-xl border border-dashed border-border",
+        )}
+      >
         <IconSpark className="h-5 w-5 text-muted" />
         <p className="text-sm font-medium">Pick a skill</p>
         <p className="max-w-[220px] text-xs text-muted">
@@ -112,7 +120,12 @@ export function SkillDetailPanel({
   const blocking = prereqs.filter((p) => p.state !== "mastered");
 
   return (
-    <div className="flex h-full flex-col gap-4 rounded-xl border border-border bg-surface p-4">
+    <div
+      className={clsx(
+        "flex h-full flex-col gap-4 p-4",
+        !bare && "rounded-xl border border-border bg-surface",
+      )}
+    >
       <header>
         <div className="flex items-start justify-between gap-2">
           <h3 className="text-sm font-semibold leading-tight">{skill.name}</h3>

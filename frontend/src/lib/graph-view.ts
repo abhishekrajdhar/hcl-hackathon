@@ -22,12 +22,16 @@ export const STATE_LABEL: Record<MasteryState, string> = {
   not_started: "Not started",
 };
 
-/** CSS custom-property names, so the graph themes with the rest of the app. */
+/**
+ * The world's colour semantics, as CSS custom properties so the 2D graph, the
+ * HUD and the 3D scene cannot drift apart. Amber marks achievement, cyan marks
+ * what is live, coral asks for attention, steel is the fog of the undiscovered.
+ */
 export const STATE_COLOR: Record<MasteryState, string> = {
-  mastered: "var(--success)",
-  learning: "var(--warning)",
-  weak: "var(--danger)",
-  not_started: "var(--muted)",
+  mastered: "var(--state-mastered)",
+  learning: "var(--state-active)",
+  weak: "var(--state-weak)",
+  not_started: "var(--state-locked)",
 };
 
 export const STATE_ORDER: MasteryState[] = ["mastered", "learning", "weak", "not_started"];

@@ -1,22 +1,34 @@
+/**
+ * A readout. Deliberately unboxed — nesting a bordered card inside a bordered
+ * panel is what makes a dashboard look like a dashboard. Separation comes from
+ * the hairline rules of the grid it sits in.
+ */
 export function Stat({
   label,
   value,
   hint,
   icon,
+  tone = "default",
 }: {
   label: string;
   value: React.ReactNode;
   hint?: string;
   icon?: React.ReactNode;
+  /** `active` lights the figure cyan; `achievement` lights it amber. */
+  tone?: "default" | "active" | "achievement";
 }) {
+  const valueColor =
+    tone === "active" ? "text-cyan" : tone === "achievement" ? "text-amber" : "text-text";
   return (
-    <div className="rounded-xl border border-border bg-surface-2/60 p-4">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-muted">{label}</span>
-        {icon && <span className="text-muted">{icon}</span>}
+    <div className="px-4 py-3">
+      <div className="flex items-center gap-1.5">
+        {icon && <span className="text-text-3">{icon}</span>}
+        <span className="label-meta">{label}</span>
       </div>
-      <div className="mt-1.5 text-2xl font-semibold tracking-tight">{value}</div>
-      {hint && <div className="mt-0.5 text-xs text-muted">{hint}</div>}
+      <div className={`readout display mt-2 text-[26px] font-semibold leading-none ${valueColor}`}>
+        {value}
+      </div>
+      {hint && <div className="mt-1.5 text-[11px] leading-snug text-text-2">{hint}</div>}
     </div>
   );
 }

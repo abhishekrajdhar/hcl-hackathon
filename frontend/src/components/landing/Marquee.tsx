@@ -1,23 +1,22 @@
+"use client";
+
+/** The catalogue as a telemetry ticker rather than a pill cloud. */
 const SKILLS = [
-  "Python", "Statistics", "Machine Learning", "Deep Learning", "PyTorch", "CNNs",
-  "MLOps", "NLP", "Transformers", "SQL", "Data Engineering", "Prompt Engineering",
-  "Computer Vision", "Reinforcement Learning", "Docker", "Kubernetes",
+  "python", "statistics", "linear-algebra", "machine-learning", "deep-learning",
+  "neural-networks", "pytorch", "cnn", "transformers", "nlp-fundamentals",
+  "computer-vision", "generative-ai", "large-language-models", "rag-systems",
+  "mlops-fundamentals", "model-deployment", "docker-containers", "etl-pipelines",
 ];
 
 export function Marquee() {
   return (
-    <section className="border-y border-border/60 bg-surface/30 py-6 backdrop-blur">
-      <p className="mb-4 text-center text-xs font-medium uppercase tracking-widest text-muted">
-        One graph of every skill — mapped, gapped, and sequenced
-      </p>
+    <section className="relative border-y border-line bg-panel/30 py-5">
       <div className="marquee-mask relative flex overflow-hidden">
-        <div className="marquee-track flex shrink-0 items-center gap-3 pr-3">
+        <div className="marquee-track flex shrink-0 items-center gap-8 pr-8">
           {[...SKILLS, ...SKILLS].map((s, i) => (
-            <span
-              key={i}
-              className="whitespace-nowrap rounded-full border border-border bg-surface px-4 py-1.5 text-sm text-muted"
-            >
-              {s}
+            <span key={i} className="flex shrink-0 items-center gap-2.5 whitespace-nowrap">
+              <span className="h-1 w-1 rounded-full bg-teal" />
+              <span className="label-meta text-text-2">{s}</span>
             </span>
           ))}
         </div>

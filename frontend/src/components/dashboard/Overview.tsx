@@ -4,12 +4,12 @@ import { Stat } from "@/components/ui/Stat";
 import { Badge } from "@/components/ui/Badge";
 import { IconTarget, IconClock, IconChart, IconClipboard } from "@/components/ui/icons";
 import type { DashboardData } from "@/lib/dashboard-data";
-import { pct } from "@/lib/format";
+import { pct, titleCase } from "@/lib/format";
 
 export function Overview({ data }: { data: DashboardData }) {
   return (
     <Card className="overflow-hidden">
-      <div className="relative bg-gradient-to-br from-brand/12 via-surface to-accent/10 p-5 sm:p-6">
+      <div className="relative p-5 sm:p-6">
         <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="space-y-2">
             <div className="flex items-center gap-2">
@@ -18,9 +18,9 @@ export function Overview({ data }: { data: DashboardData }) {
               </Badge>
               <Badge tone="accent">Current: {data.currentMilestone}</Badge>
             </div>
-            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{data.goal}</h1>
+            <h1 className="display text-2xl font-semibold sm:text-[28px]">{titleCase(data.goal)}</h1>
             <p className="max-w-xl text-sm text-muted">
-              You&apos;re building toward {data.role}. Keep going — you&apos;re making steady progress.
+              Your route to {titleCase(data.role)}, rebuilt every time your skills change.
             </p>
           </div>
           <div className="shrink-0">
@@ -28,9 +28,10 @@ export function Overview({ data }: { data: DashboardData }) {
           </div>
         </div>
 
-        <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="mt-7 grid grid-cols-2 divide-x divide-y divide-line border-t border-line lg:grid-cols-4 lg:divide-y-0">
           <Stat
             label="Milestones"
+            tone="active"
             value={`${data.stats.itemsCompleted}/${data.stats.itemsTotal}`}
             hint="items completed"
             icon={<IconClipboard className="h-4 w-4" />}
@@ -51,6 +52,7 @@ export function Overview({ data }: { data: DashboardData }) {
           />
           <Stat
             label="Avg. assessment"
+            tone="achievement"
             value={pct(data.stats.avgAssessment)}
             hint={`${data.weeklyHours}h / week`}
             icon={<IconClipboard className="h-4 w-4" />}

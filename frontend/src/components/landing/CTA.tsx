@@ -1,45 +1,38 @@
+"use client";
+
 import Link from "next/link";
+import { Reveal } from "@/components/landing/motion";
 import { IconArrow } from "@/components/ui/icons";
-import { Reveal, Spotlight } from "@/components/landing/motion";
 
 export function CTA() {
   return (
-    <section className="relative py-20 sm:py-28">
-      <div className="mx-auto max-w-5xl px-4 lg:px-6">
+    <section className="relative border-t border-line py-28 lg:py-36">
+      {/* One distant light source, centred behind the type. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(ellipse 50% 60% at 50% 50%, rgba(41,230,209,0.08), transparent 70%)",
+        }}
+      />
+      <div className="relative mx-auto max-w-[1400px] px-6 text-center lg:px-12">
         <Reveal>
-          <div className="relative overflow-hidden rounded-3xl border border-brand/30 bg-gradient-to-br from-brand/15 via-surface to-accent/15 p-10 text-center shadow-card sm:p-16">
-            <Spotlight />
-            <div className="animate-blob absolute -right-16 -top-16 h-56 w-56 rounded-full bg-accent/20 blur-3xl" />
-            <div className="animate-blob absolute -bottom-16 -left-16 h-56 w-56 rounded-full bg-brand/20 blur-3xl" style={{ animationDelay: "-8s" }} />
-
-            <div className="relative">
-              <h2 className="text-3xl font-extrabold tracking-tight sm:text-5xl">
-                Learn smarter,
-                <br />
-                <span className="text-gradient">not just harder.</span>
-              </h2>
-              <p className="mx-auto mt-4 max-w-xl text-muted">
-                Set your goal in one sentence. Get a roadmap that adapts to every step you take.
-                Free to start — no card required.
-              </p>
-              <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-                <Link
-                  href="/dashboard"
-                  className="group relative inline-flex items-center gap-2 overflow-hidden rounded-xl bg-gradient-to-r from-brand to-accent px-6 py-3 text-sm font-semibold text-white shadow-card transition-transform hover:scale-[1.04]"
-                >
-                  <span className="relative z-10">Start your path</span>
-                  <IconArrow className="relative z-10 h-4 w-4 transition-transform group-hover:translate-x-1" />
-                  <span className="absolute inset-0 -translate-x-full bg-white/25 transition-transform duration-500 group-hover:translate-x-full" />
-                </Link>
-                <Link
-                  href="/dashboard"
-                  className="rounded-xl border border-border bg-surface/70 px-6 py-3 text-sm font-semibold backdrop-blur transition-colors hover:bg-surface"
-                >
-                  Explore the demo
-                </Link>
-              </div>
-            </div>
-          </div>
+          <p className="label-meta text-cyan">Ready when you are</p>
+          <h2 className="display mx-auto mt-5 max-w-2xl text-3xl font-semibold leading-tight lg:text-[46px]">
+            Find out where you actually stand.
+          </h2>
+          <p className="mx-auto mt-5 max-w-md text-[14px] leading-relaxed text-text-2">
+            Describe a goal in a sentence. The engine maps the terrain between
+            you and it, and shows you the route.
+          </p>
+          <Link
+            href="/dashboard"
+            className="group mt-10 inline-flex items-center gap-2.5 border border-cyan/50 bg-cyan/10 px-7 py-3.5 text-[13px] font-medium tracking-wide text-cyan transition-all hover:bg-cyan/20 hover:shadow-glow"
+          >
+            ENTER THE UNIVERSE
+            <IconArrow className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
+          </Link>
         </Reveal>
       </div>
     </section>

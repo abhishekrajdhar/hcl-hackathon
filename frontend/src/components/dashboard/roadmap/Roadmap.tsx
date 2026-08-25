@@ -106,10 +106,10 @@ export function Roadmap({ data }: { data: DashboardData }) {
 
 function GoalNode({ roadmap }: { roadmap: RoadmapView }) {
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-brand/30 bg-gradient-to-br from-brand-soft to-surface p-5">
+    <div className="hud hud-bracket relative overflow-hidden border-cyan/25 p-5">
       <div className="flex items-center justify-between gap-4">
         <div className="min-w-0">
-          <div className="mb-1 inline-flex items-center gap-1.5 rounded-full bg-brand/15 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-brand">
+          <div className="label-meta mb-2 inline-flex items-center gap-1.5 text-cyan">
             <IconTarget className="h-3.5 w-3.5" /> Goal
           </div>
           <h3 className="truncate text-lg font-bold sm:text-xl">{roadmap.goal}</h3>

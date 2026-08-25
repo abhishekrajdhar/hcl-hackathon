@@ -58,7 +58,7 @@ PostgreSQL 16 + pgvector · Alembic · Redis (shared query-embedding cache) ·
 Docker Compose
 
 **Frontend** — Next.js 15 (App Router) · React 19 · TypeScript · Tailwind ·
-Recharts · Three.js (react-three-fiber) for the Learning Universe
+Recharts · Three.js (react-three-fiber) · Inter + Space Grotesk
 
 **Models** — LLM provider is `mock | claude | openai`, embeddings are
 `mock | sentence_transformer`, both chosen from settings and never hard-coded in
@@ -266,6 +266,51 @@ The nine tools available to it:
 | `update_learning_progress` | Record a completion or score, adapt the path |
 | `get_goal_prerequisites` | What the goal rests on, split into met and unknown |
 | `explain_skill_relationship` | How one skill depends on another in the graph |
+
+## The interface
+
+The app is one dark, cinematic world rather than a dashboard. Design tokens
+live in `app/globals.css`; **colour carries information**, roughly 70%
+obsidian/graphite, 20% cyan/teal, 7% amber, 3% coral:
+
+| Colour | Meaning |
+|---|---|
+| Cyan `#29E6D1` | Active — currently learning, interactive, selected |
+| Teal `#0F8F87` | Available, healthy, secondary structure |
+| Amber `#FFB84A` | Mastered, achievement, milestone |
+| Coral `#FF6B6B` | Weak, needs attention |
+| Steel `#607080` | Locked, undiscovered — the knowledge fog |
+
+`STATE_COLOR` in `lib/graph-view.ts` and `STATE_HEX` in `GalaxyScene.tsx` both
+read from this one set, so the 2D graph, the 3D world and the HUD cannot drift
+apart.
+
+The chrome is instrumentation, not cards: hairline edges, near-square corners,
+corner brackets (`.hud`, `.hud-bracket`), uppercase tracked metadata
+(`.label-meta`), tabular readouts, and Space Grotesk for display type. There is
+no sidebar — a 68px rail expands on hover, and a 48px status strip carries the
+goal, level, XP and pace. Nothing sits in a rounded card.
+
+**The Learning Universe is the page**, not a widget on it: it opens full-bleed
+at viewport height with every panel floating over it. Selecting a star eases
+the camera toward it along its current bearing (so the world never spins behind
+the learner), lights the prerequisite chain with charge packets travelling
+prerequisite → dependent, and dims everything else.
+
+XP and level are **derived, not stored** (`lib/xp.ts`) — pure functions of
+completed items, proficiency and assessment performance, so the number can
+never disagree with the work behind it.
+
+There is **one palette and no theme switch**. A daylight variant would have
+meant either a washed-out galaxy or overlay text that goes dark-on-dark over a
+world that is always night — so the product commits to night and the whole
+system gets simpler for it.
+
+The landing page runs the **real engine**, not a mockup: its hero mounts the
+same `GalaxyScene` with the demo graph, in ambient mode (drifting camera, no
+selection, pointer events passing through). Sections below are an engine spec
+sheet — numbered subsystems naming the actual modules, and the pipeline drawn
+as a signal chain.
 
 ## Talking to it
 
