@@ -8,6 +8,7 @@ import { NextAction } from "@/components/dashboard/NextAction";
 import { Roadmap } from "@/components/dashboard/roadmap/Roadmap";
 import { LearningPath } from "@/components/dashboard/LearningPath";
 import { SkillProgress } from "@/components/dashboard/SkillProgress";
+import { KnowledgeGraph } from "@/components/dashboard/graph/KnowledgeGraph";
 import { Milestones } from "@/components/dashboard/Milestones";
 import { Recommendations } from "@/components/dashboard/Recommendations";
 import { Assessments } from "@/components/dashboard/Assessments";
@@ -95,6 +96,10 @@ export default function DashboardPage() {
 
             <div id="skills" className="scroll-mt-6">
               <SkillProgress data={data} />
+            </div>
+
+            <div id="graph" className="scroll-mt-6">
+              <KnowledgeGraph data={data} />
             </div>
 
             <div id="recommendations" className="scroll-mt-6">

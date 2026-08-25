@@ -360,3 +360,73 @@ export interface FeedbackCreate {
   rating?: number; // 1..5
   comment?: string;
 }
+
+// ---- skill graph -----------------------------------------------------------
+
+export type RelationshipType =
+  | "hard_prerequisite"
+  | "soft_prerequisite"
+  | "recommended"
+  | "related";
+
+export interface SkillSummary {
+  id: UUID;
+  slug: string;
+  name: string;
+  difficulty: number;
+  category_id: UUID | null;
+}
+
+export interface SkillCategoryRead {
+  id: UUID;
+  slug: string;
+  name: string;
+}
+
+export interface SkillListItem {
+  id: UUID;
+  slug: string;
+  name: string;
+  description: string | null;
+  difficulty: number;
+  category_id: UUID;
+  category: SkillCategoryRead | null;
+}
+
+/** A prerequisite edge: `source_skill_id` requires `prerequisite_skill_id`. */
+export interface PrerequisiteRead {
+  source_skill_id: UUID;
+  prerequisite_skill_id: UUID;
+  relationship_type: RelationshipType;
+  strength: number;
+  min_level: number;
+  rationale: string | null;
+}
+
+export interface SkillGraphNode {
+  skill_id: UUID;
+  slug: string;
+  name: string;
+  depth: number;
+}
+
+/** GET /skills/{id}/graph — transitive prerequisite closure of one skill. */
+export interface SkillGraphResponse {
+  root_skill_id: UUID;
+  nodes: SkillGraphNode[];
+  edges: PrerequisiteRead[];
+}
+
+/** GET /skills/{id}/dependencies — full dependency analysis for one skill. */
+export interface SkillDependencyAnalysis {
+  skill: SkillSummary;
+  direct_prerequisites: SkillSummary[];
+  all_prerequisites: SkillSummary[];
+  total_prerequisites: number;
+  max_depth: number;
+  critical_path: SkillSummary[];
+  critical_path_length: number;
+  levels: SkillSummary[][];
+  learning_sequence: SkillSummary[];
+  unlocks: SkillSummary[];
+}

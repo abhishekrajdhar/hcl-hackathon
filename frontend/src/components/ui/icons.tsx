@@ -34,3 +34,4 @@ export const IconExternal = base(<><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 
 export const IconSend = base(<><path d="M4 12l16-8-6 16-3-6-7-2z" /></>);
 export const IconLogout = base(<><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" /></>);
 export const IconLayers = base(<><path d="M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5M3 17l9 5 9-5" /></>);
+export const IconGraph = base(<><circle cx="12" cy="4" r="2" /><circle cx="5" cy="15" r="2" /><circle cx="19" cy="15" r="2" /><circle cx="12" cy="21" r="1.5" /><path d="M12 6v3M11 9.5 6.5 13M13 9.5l4.5 3.5M6.5 16.5 11 20M17.5 16.5 13 20" /></>);

@@ -2,7 +2,7 @@
 
 import { clsx } from "@/lib/cn";
 import { Badge } from "@/components/ui/Badge";
-import { IconLogout, IconTarget, IconPath, IconChart, IconFlag, IconBook, IconClipboard, IconActivity, IconChat, IconSpark, IconLayers } from "@/components/ui/icons";
+import { IconLogout, IconTarget, IconPath, IconChart, IconFlag, IconBook, IconClipboard, IconActivity, IconChat, IconSpark, IconLayers, IconGraph } from "@/components/ui/icons";
 
 const NAV = [
   { id: "overview", label: "Overview", icon: IconTarget },
@@ -10,6 +10,7 @@ const NAV = [
   { id: "roadmap", label: "Roadmap", icon: IconLayers },
   { id: "path", label: "Learning Path", icon: IconPath },
   { id: "skills", label: "Skill Progress", icon: IconChart },
+  { id: "graph", label: "Knowledge Graph", icon: IconGraph },
   { id: "milestones", label: "Milestones", icon: IconFlag },
   { id: "recommendations", label: "Recommended", icon: IconBook },
   { id: "assessments", label: "Assessments", icon: IconClipboard },
