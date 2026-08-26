@@ -287,15 +287,27 @@ function MilestoneCard({
         </div>
       )}
 
-      {/* proficiency toward target */}
+      {/* Two different measurements, so they are labelled as such. The bar is
+          PROFICIENCY against the goal's target; the figure on the right is how
+          much of the material is done. Left unlabelled, "100% complete" beside
+          "75%" reads as a contradiction. */}
       <div className="mt-2.5">
         <ProgressBar value={m.current} target={m.required} tone={s.bar} />
         <div className="mt-1 flex justify-between text-[11px] text-muted">
           <span>
-            {Math.round(m.current * 100)}% → target {Math.round(m.required * 100)}%
+            <span className="text-fg">{Math.round(m.current * 100)}%</span> proficiency · target{" "}
+            {Math.round(m.required * 100)}%
           </span>
-          <span>{m.completionPct}% complete</span>
+          <span>{m.completionPct}% of material done</span>
         </div>
+        {/* The case that caused the confusion: everything finished, level not
+            yet reached. Say so plainly instead of implying the two agree. */}
+        {m.completionPct === 100 && m.current < m.required && (
+          <p className="mt-1.5 text-[11px] text-cyan">
+            Material finished — proficiency is still {Math.round((m.required - m.current) * 100)}
+            {" "}points below target. An assessment result will move it.
+          </p>
+        )}
       </div>
 
       {/* locked → prerequisites */}

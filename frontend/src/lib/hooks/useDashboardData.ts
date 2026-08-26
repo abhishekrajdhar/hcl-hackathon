@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api, auth, getToken } from "@/lib/api";
+import { ApiError, api, auth, getToken } from "@/lib/api";
 import type { DashboardData } from "@/lib/dashboard-data";
 import { buildDashboardData } from "@/lib/derive";
 import { demoData } from "@/lib/demo";
@@ -18,6 +18,8 @@ type State = {
   loading: boolean;
   error: string | null;
   isDemo: boolean;
+  /** Signed in, but no profile yet — this learner has not been onboarded. */
+  needsOnboarding: boolean;
 };
 
 // Loads the signed-in learner's dashboard through the API layer, falling back to
@@ -31,12 +33,19 @@ export function useDashboardData(): State & {
     loading: true,
     error: null,
     isDemo: true,
+    needsOnboarding: false,
   });
 
   const load = useCallback(async () => {
     setState((s) => ({ ...s, loading: true, error: null }));
     if (!getToken()) {
-      setState({ data: demoData, loading: false, error: null, isDemo: true });
+      setState({
+        data: demoData,
+        loading: false,
+        error: null,
+        isDemo: true,
+        needsOnboarding: false,
+      });
       return;
     }
     try {
@@ -64,14 +73,19 @@ export function useDashboardData(): State & {
       ]);
 
       const data = buildDashboardData({ profile, roadmap, progress, recommendations, events: eventsPage });
-      setState({ data, loading: false, error: null, isDemo: false });
+      setState({ data, loading: false, error: null, isDemo: false, needsOnboarding: false });
     } catch (e) {
-      // Signed in but no profile/path yet — show the demo so the UI is meaningful.
+      // Signed in but with no profile yet: this is a NEW learner, not an error.
+      // Showing them a stranger's demo journey as though it were theirs was the
+      // wrong call — they get onboarding instead, and the demo stays something
+      // you opt into.
+      const notFound = e instanceof ApiError && e.status === 404;
       setState({
         data: demoData,
         loading: false,
-        error: e instanceof Error ? e.message : "Failed to load",
+        error: notFound ? null : e instanceof Error ? e.message : "Failed to load",
         isDemo: true,
+        needsOnboarding: notFound,
       });
     }
   }, []);

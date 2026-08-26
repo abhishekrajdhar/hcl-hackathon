@@ -33,8 +33,10 @@ const foundations: RoadmapPhase = {
       id: "statistics",
       title: "Statistics",
       skill: "Statistics",
+      // A completed milestone has, by definition, reached its target — the
+      // demo data used to claim completion at 0.65 against a 0.8 target.
       state: "completed",
-      current: 0.65,
+      current: 0.83,
       required: 0.8,
       completionPct: 100,
       estimatedMinutes: 1500,
@@ -97,7 +99,7 @@ const ml: RoadmapPhase = {
       title: "Machine Learning",
       skill: "Machine Learning",
       state: "completed",
-      current: 0.75,
+      current: 0.88,
       required: 0.85,
       completionPct: 100,
       estimatedMinutes: 3600,

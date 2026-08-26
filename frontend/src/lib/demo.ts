@@ -12,16 +12,16 @@ import { demoRoadmap } from "@/lib/roadmap-demo";
 
 const skills = [
   { name: "Python", slug: "python", current: 0.9, target: 0.9 },
-  { name: "Statistics", slug: "statistics", current: 0.65, target: 0.8 },
-  { name: "Machine Learning", slug: "machine-learning", current: 0.75, target: 0.85 },
+  { name: "Statistics", slug: "statistics", current: 0.83, target: 0.8 },
+  { name: "Machine Learning", slug: "machine-learning", current: 0.88, target: 0.85 },
   { name: "Deep Learning", slug: "deep-learning", current: 0.42, target: 0.8 },
   { name: "PyTorch", slug: "pytorch", current: 0.31, target: 0.7 },
   { name: "MLOps", slug: "mlops", current: 0.15, target: 0.6 },
 ];
 
 const milestones: MilestoneDatum[] = [
-  { phaseTitle: "Foundations", phaseIndex: 0, title: "Statistics", status: "completed", current: 0.65, required: 0.8, gap: 0.15, estimatedMinutes: 1500, resourceCount: 2, hasAssessment: true, isCapstone: false, completionCriteria: "Score 70% on the Statistics checkpoint." },
-  { phaseTitle: "Machine Learning", phaseIndex: 1, title: "Machine Learning", status: "completed", current: 0.75, required: 0.85, gap: 0.1, estimatedMinutes: 3600, resourceCount: 2, hasAssessment: true, isCapstone: false, completionCriteria: "Pass the ML foundations assessment." },
+  { phaseTitle: "Foundations", phaseIndex: 0, title: "Statistics", status: "completed", current: 0.83, required: 0.8, gap: 0, estimatedMinutes: 1500, resourceCount: 2, hasAssessment: true, isCapstone: false, completionCriteria: "Score 70% on the Statistics checkpoint." },
+  { phaseTitle: "Machine Learning", phaseIndex: 1, title: "Machine Learning", status: "completed", current: 0.88, required: 0.85, gap: 0, estimatedMinutes: 3600, resourceCount: 2, hasAssessment: true, isCapstone: false, completionCriteria: "Pass the ML foundations assessment." },
   { phaseTitle: "Deep Learning", phaseIndex: 2, title: "Deep Learning", status: "in_progress", current: 0.42, required: 0.8, gap: 0.38, estimatedMinutes: 4800, resourceCount: 3, hasAssessment: true, isCapstone: false, completionCriteria: "Complete the DL course and score 70% on the checkpoint." },
   { phaseTitle: "Deep Learning", phaseIndex: 2, title: "PyTorch", status: "available", current: 0.31, required: 0.7, gap: 0.39, estimatedMinutes: 1200, resourceCount: 2, hasAssessment: true, isCapstone: false, completionCriteria: "Finish PyTorch Fundamentals and the checkpoint." },
   { phaseTitle: "Deep Learning", phaseIndex: 2, title: "CNNs", status: "locked", current: 0.1, required: 0.7, gap: 0.6, estimatedMinutes: 2400, resourceCount: 2, hasAssessment: true, isCapstone: false, completionCriteria: "Build a CNN image classifier." },

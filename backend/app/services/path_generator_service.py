@@ -47,9 +47,10 @@ from app.schemas.learning_path import (
     RoadmapMilestone,
     RoadmapPhase,
 )
-from app.schemas.skill_gap import SkillGapAnalyzeRequest
+from app.schemas.skill_gap import RequiredSkillInput, SkillGapAnalyzeRequest
 from app.services.base import BaseService
 from app.services.skill_gap_service import SkillGapService
+from app.services.skill_resolver import SkillResolver
 
 GENERATOR_VERSION = "path-generator-v1"
 #: Resources selected per milestone skill.
@@ -75,10 +76,18 @@ class PathGeneratorService(BaseService):
         requesting_user_id: uuid.UUID | None = None,
         is_admin: bool = False,
     ) -> LearningPathRoadmap:
+        target_skills = request.target_skills
+        # A learner describes a goal in a sentence, not as a list of skill ids.
+        # When nothing explicit was supplied, resolve the goal text against the
+        # catalogue and plan toward that skill — the gap engine pulls in its
+        # whole prerequisite closure from there, which is the actual roadmap.
+        if not target_skills and request.goal_id is None:
+            target_skills = await self._targets_from_goal_text(request.goal_text)
+
         gap_request = SkillGapAnalyzeRequest(
             user_id=request.user_id,
             goal_id=request.goal_id,
-            target_skills=request.target_skills,
+            target_skills=target_skills,
         )
         computed = await self.gap_service.compute(
             gap_request, requesting_user_id=requesting_user_id, is_admin=is_admin
@@ -107,6 +116,39 @@ class PathGeneratorService(BaseService):
         roadmap = build_roadmap(milestones, constraints, goal, capstone)
         path = await self._persist(request, learner_id, roadmap, explicit_targets)
         return await self._roadmap_for(path.id, learner_id)
+
+    #: How proficient a goal skill must be for the goal to count as reached.
+    GOAL_TARGET_LEVEL = 0.8
+
+    async def _targets_from_goal_text(self, goal_text: str | None) -> list[RequiredSkillInput]:
+        """Turn "machine learning engineer" into a target the engine can plan for.
+
+        Raises rather than guessing when the goal does not name something the
+        catalogue knows: planning a roadmap toward a skill that does not exist
+        would produce a confident, empty path.
+        """
+        text = (goal_text or "").strip()
+        if not text:
+            raise ValidationError(
+                "Tell me the goal you want to plan for, or pick target skills.",
+                error_code="no_goal",
+            )
+
+        resolution = await SkillResolver(self.session).resolve(text)
+        if resolution.status == "matched" and resolution.skill is not None:
+            return [
+                RequiredSkillInput(
+                    skill_id=resolution.skill.id, required_level=self.GOAL_TARGET_LEVEL
+                )
+            ]
+
+        suggestions = ", ".join(c.name for c in resolution.candidates[:3])
+        detail = f" Did you mean: {suggestions}?" if suggestions else ""
+        raise ValidationError(
+            f"'{text}' doesn't match a skill in the catalogue, so I can't plan a "
+            f"route to it yet.{detail}",
+            error_code="goal_unresolved",
+        )
 
     async def regenerate(
         self,

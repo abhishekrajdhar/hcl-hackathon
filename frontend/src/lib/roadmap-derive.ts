@@ -24,9 +24,19 @@ import { titleCase } from "@/lib/format";
 
 function milestoneState(m: ApiMilestone): RoadmapState {
   const items = [...m.resources, ...(m.assessment ? [m.assessment] : []), ...(m.project ? [m.project] : [])];
-  if (items.length === 0) return m.gap <= 0 ? "completed" : "locked";
+  const levelReached = m.gap <= 0;
+
+  if (items.length === 0) return levelReached ? "completed" : "locked";
   if (items.some((i) => i.status === "in_progress")) return "current";
-  if (items.every((i) => i.status === "completed" || i.status === "skipped")) return "completed";
+
+  const itemsDone = items.every((i) => i.status === "completed" || i.status === "skipped");
+  // Finishing the material is not the same as reaching the level. Proficiency
+  // moves on assessment evidence, so a learner can complete every resource and
+  // still sit below the target — claiming "completed" there put a COMPLETED
+  // badge directly above "75% → target 85%", which is a contradiction, not a
+  // status. Until the level is met the milestone is still in progress.
+  if (itemsDone) return levelReached ? "completed" : "current";
+
   if (items.some((i) => i.status === "available")) return "available";
   return "locked";
 }

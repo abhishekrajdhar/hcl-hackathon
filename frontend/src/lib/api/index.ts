@@ -7,4 +7,5 @@ export * as catalogueApi from "./catalogue";
 export * as assessmentsApi from "./assessments";
 export * as meApi from "./me";
 export * as systemApi from "./system";
+export * as onboardingApi from "./onboarding";
 export { ApiError, getToken, setToken } from "./client";

@@ -51,9 +51,25 @@ class Intent:
     known_skills: list[str] = field(default_factory=list)
 
 
+# Learners phrase a goal many ways, and onboarding is the one turn where
+# missing it costs the most — a goal that does not register leaves the learner
+# with no profile and no roadmap. "become/be" alone was far too narrow; this
+# also accepts learning, building, working in, moving into and mastering.
+# Ordered alternatives, longest first, so "want to learn about X" does not
+# match the shorter "want to learn" and capture "about X".
+_GOAL_VERBS = (
+    r"want to (?:become|be)|want to learn(?: about)?|want to build(?: with)?|"
+    r"want to work (?:in|with|on)|want to get into|want to move into|"
+    r"want to master|want to specialise in|want to specialize in|want a career in|"
+    r"would like to (?:become|be|learn)|"
+    r"goal is (?:to become|to be|to learn|)|"
+    r"(?:'|\u2019)?d like to be(?:come)?|(?:'|\u2019)?m aiming to be(?:come)?|"
+    r"help me (?:become|learn)|looking to (?:become|learn)"
+)
 _GOAL_RE = re.compile(
-    r"(?:i want to (?:become|be)|my goal is (?:to become|to be|)|i(?:'|')?d like to be(?:come)?|"
-    r"become)\s+(?:an?\s+)?(?P<goal>[a-z][a-z0-9 /+\-]{2,60}?)(?:\.|,|;|!|\?|$| so | because )",
+    rf"(?:i\s+)?(?:{_GOAL_VERBS})\s+(?:an?\s+)?"
+    r"(?P<goal>[a-z][a-z0-9 /+\-]{2,60}?)"
+    r"(?:\.|,|;|!|\?|$| so | because | and i | but i | with about | with roughly )",
     re.IGNORECASE,
 )
 _SCORE_RE = re.compile(r"(?:scored|got|made)\s+(?P<score>\d{1,3}(?:\.\d+)?)\s*%", re.IGNORECASE)

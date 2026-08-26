@@ -128,9 +128,15 @@ async def test_semantic_search_ranks_relevant_first(api: AsyncClient, admin, lea
     # similarity is sorted descending
     sims = [res["similarity"] for res in body["results"]]
     assert sims == sorted(sims, reverse=True)
-    # the top hit is clearly a deep-learning resource
-    top_title = body["results"][0]["resource"]["title"].lower()
-    assert "deep learning" in top_title
+    # The top hit is a deep-learning resource. Asserted on the SKILLS it
+    # teaches rather than on its title: the catalogue is real content whose
+    # wording changes, and "How Deep Neural Networks Work" is a correct answer
+    # that a title substring check would call a failure.
+    top = body["results"][0]["resource"]
+    taught = {s["skill"]["slug"] for s in top.get("skills", []) if s.get("skill")}
+    assert taught & {"deep-learning", "neural-networks", "pytorch"}, (
+        f"unexpected top hit: {top['title']} teaches {taught}"
+    )
 
 
 async def test_semantic_search_respects_top_k(api: AsyncClient, admin, learner_ctx) -> None:  # type: ignore[no-untyped-def]

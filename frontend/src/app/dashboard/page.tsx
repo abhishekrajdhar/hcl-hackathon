@@ -27,7 +27,7 @@ function DashboardView() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, ready, signOut } = useAuth();
-  const { data, loading, isDemo, reload, applyAdaptive } = useDashboardData();
+  const { data, loading, isDemo, needsOnboarding, reload, applyAdaptive } = useDashboardData();
   // ?demo=1 lets the login page hand someone straight into the bundled dataset
   // without an account.
   const demoMode = searchParams.get("demo") === "1";
@@ -37,6 +37,13 @@ function DashboardView() {
   useEffect(() => {
     if (ready && !user && !demoMode) router.replace("/login");
   }, [ready, user, demoMode, router]);
+
+  // A signed-in learner with no profile has never told us anything about
+  // themselves. Send them to onboarding rather than showing a demo journey
+  // dressed up as their own.
+  useEffect(() => {
+    if (ready && user && needsOnboarding && !demoMode) router.replace("/onboarding");
+  }, [ready, user, needsOnboarding, demoMode, router]);
 
   if (!ready) {
     return (
@@ -55,6 +62,7 @@ function DashboardView() {
   // The redirect above is in flight; render nothing rather than a flash of
   // dashboard chrome for someone who is not signed in.
   if (!user && !demoMode) return null;
+  if (user && needsOnboarding && !demoMode) return null;
 
   return (
     <ToastProvider>

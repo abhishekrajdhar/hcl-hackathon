@@ -151,8 +151,30 @@ async def test_advanced_course_not_recommended_before_foundations(api: AsyncClie
 
 async def test_include_unready_surfaces_gated_resources(api: AsyncClient, beginner) -> None:  # type: ignore[no-untyped-def]
     uid, h = beginner
+    # Target the DEEP end of the graph on purpose. Retrieval returns a bounded
+    # candidate pool, so a broad "ML engineer" goal can legitimately fill it
+    # with beginner material the learner is ready for — which says nothing
+    # about whether the gate works. Asking for neural networks guarantees the
+    # pool contains resources whose prerequisites this learner has not met.
     r = await api.post(
-        "/recommendations", headers=h, json=_ml_engineer_request(uid, include_unready=True, top_k=40)
+        "/recommendations",
+        headers=h,
+        json={
+            "user_id": str(uid),
+            "target_skills": [
+                {"skill_slug": "neural-networks", "required_level": 0.8},
+                {"skill_slug": "deep-learning", "required_level": 0.8},
+            ],
+            # `skill_slug` narrows retrieval to resources for that skill.
+            # Without it the candidate pool is bounded and can fill with
+            # beginner material this learner IS ready for, which tells us
+            # nothing about the gate — the pool, not the gate, would decide
+            # the test.
+            "skill_slug": "neural-networks",
+            "goal_text": "deep learning and neural networks",
+            "include_unready": True,
+            "top_k": 40,
+        },
     )
     body = r.json()
     unready = [i for i in body["recommendations"] if not i["is_ready"]]

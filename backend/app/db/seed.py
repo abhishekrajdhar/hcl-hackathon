@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -172,6 +173,56 @@ def _edge_payload(source_id: object, prereq_id: object, edge: object):  # type: 
     )
 
 
+async def _reconcile_resource(session, resource, seed, slug_to_id) -> None:  # type: ignore[no-untyped-def]
+    """Bring an existing catalogue row back in line with the seed.
+
+    Scalar fields are overwritten; the skill and prerequisite links are
+    replaced wholesale, which is simpler and safer than diffing them and keeps
+    the row a faithful copy of the seed.
+    """
+    resource.title = seed.title
+    resource.description = seed.description
+    resource.url = seed.url
+    resource.resource_type = seed.resource_type
+    resource.modality = seed.modality
+    resource.difficulty = seed.difficulty
+    resource.estimated_hours = seed.estimated_hours
+    resource.quality_score = seed.quality_score
+    resource.rating = seed.rating
+    resource.rating_count = seed.rating_count
+    resource.extra = dict(seed.metadata)
+    resource.is_active = True
+
+    await session.execute(
+        delete(ResourceSkill).where(ResourceSkill.resource_id == resource.id)
+    )
+    await session.execute(
+        delete(ResourcePrerequisite).where(ResourcePrerequisite.resource_id == resource.id)
+    )
+    for teach in seed.teaches:
+        skill_id = slug_to_id.get(teach.skill)
+        if skill_id is None:
+            continue
+        session.add(
+            ResourceSkill(
+                resource_id=resource.id,
+                skill_id=skill_id,
+                teaches_level_from=teach.level_from,
+                teaches_level_to=teach.level_to,
+                is_primary=teach.is_primary,
+            )
+        )
+    for slug, min_prof in seed.prerequisites:
+        skill_id = slug_to_id.get(slug)
+        if skill_id is None:
+            continue
+        session.add(
+            ResourcePrerequisite(
+                resource_id=resource.id, skill_id=skill_id, min_proficiency=min_prof
+            )
+        )
+
+
 async def seed_resources() -> None:
     """Upsert the learning-resource catalogue with its skills and prerequisites.
 
@@ -191,8 +242,19 @@ async def seed_resources() -> None:
         slug_to_id = {s.slug: s.id for s in await skills.get_many_by_slug(sorted(referenced))}
 
         created = 0
+        updated = 0
         for seed in RESOURCES:
-            if await resources.get_by(provider=seed.provider, external_id=seed.external_id) is not None:
+            existing = await resources.get_by(
+                provider=seed.provider, external_id=seed.external_id
+            )
+            if existing is not None:
+                # Reconcile rather than skip. The catalogue is real content: a
+                # video's title or runtime can change, and its skill links or
+                # prerequisites can be corrected in the seed. Skipping meant a
+                # re-seed silently did nothing, so edits never landed. The row
+                # keeps its id, so learning paths pointing at it stay valid.
+                await _reconcile_resource(session, existing, seed, slug_to_id)
+                updated += 1
                 continue
 
             resource = Resource(
@@ -242,7 +304,11 @@ async def seed_resources() -> None:
         await session.commit()
         logger.info(
             "seeded resources",
-            extra={"resources_created": created, "resources_total": len(RESOURCES)},
+            extra={
+                "resources_created": created,
+                "resources_updated": updated,
+                "resources_total": len(RESOURCES),
+            },
         )
 
 

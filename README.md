@@ -405,9 +405,34 @@ ever opened.
 ## Seed data
 
 `python -m app.db.seed` is idempotent and safe on every deploy. It writes the
-bootstrap admin plus a working knowledge graph: **10 categories, 49 skills,
-76 prerequisite edges, 25 resources**. Edges reference skills by slug and are
-resolved and cycle-checked at load time.
+bootstrap admin, a working knowledge graph — **10 categories, 49 skills,
+76 prerequisite edges** — and the resource catalogue.
+
+The catalogue is **real content**: 57 YouTube courses and lectures whose title,
+channel and runtime were read from YouTube's own oEmbed endpoint and watch
+page, not written by hand. A candidate that failed verification was dropped
+rather than seeded with guessed metadata, so every URL resolves and every
+`estimated_hours` is an actual runtime (261 hours in total, from freeCodeCamp,
+3Blue1Brown, StatQuest, Andrej Karpathy, Corey Schafer and others). Refresh it
+when videos change:
+
+```bash
+python scripts/refresh_catalogue.py   # re-reads YouTube
+python scripts/gen_seed.py            # regenerates the seed
+python -m app.db.seed                 # reconciles the database
+```
+
+Resource prerequisites are **derived from the skill graph** rather than written
+twice, so the catalogue and the DAG cannot disagree about what gates what.
+Introductory material (difficulty 1–2) is never gated — gating a beginner
+course behind prerequisites is how a learner gets stuck.
+
+Alongside the videos sit 8 project briefs and 3 checkpoints, which are
+completed inside the app rather than on an external site.
+
+Seeding **reconciles** existing rows rather than skipping them: a title,
+runtime or prerequisite that changes in the seed lands on the next run, and the
+row keeps its id so learning paths pointing at it stay valid.
 
 ## Entities
 
@@ -474,6 +499,15 @@ Recommended, Assessments, AI Coach, System.
 Authentication is its own route rather than a form wearing the dashboard's
 chrome: `/dashboard` redirects an unauthenticated visitor to `/login`, and
 `/dashboard?demo=1` opens the bundled demo dataset with no account at all.
+
+A learner who signs up goes to **`/onboarding`**, not to someone else's demo
+journey. They describe the goal in one sentence — "I want to become a machine
+learning engineer, I have about 8 hours a week and I already know Python" — and
+that single message sets the goal, the weekly budget and the skills they
+already have. `POST /learning-path/generate` then resolves the goal text to a
+catalogue skill and plans the route to it, so nobody has to pick target skills
+from a list. A goal that does not resolve returns a 422 naming the closest
+matches rather than planning a confident, empty path.
 Both `POST /auth/login` and `POST /auth/register` return a token, which the API
 client stores before the route pushes on to the dashboard.
 
