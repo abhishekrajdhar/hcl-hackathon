@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import AppError
 from app.embeddings.base import EmbeddingProvider
+from app.llm.base import LLMProvider
 from app.models.enums import PathItemStatus
 from app.repositories.recommendation import RecommendationRepository
 from app.schemas.adaptive import AdaptiveUpdateRequest, ExplicitSkillScore
@@ -41,6 +42,7 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
     "update_learning_progress": "Record a completed resource or an assessment score and adapt the path.",
     "get_goal_prerequisites": "Direct prerequisites of the learner's goal skill, split into met and unknown.",
     "explain_skill_relationship": "How one skill depends on another in the prerequisite graph.",
+    "suggest_careers": "Career directions ranked by the learner's interests and existing skills.",
 }
 
 
@@ -237,6 +239,44 @@ class ChatToolExecutor:
                           "Tell me what you completed or the score you got.")
 
     # --- helpers ---------------------------------------------------------
+    # --- 11 --------------------------------------------------------------
+    async def suggest_careers(
+        self, free_text: str = "", llm: "LLMProvider | None" = None
+    ) -> ToolResult:
+        """Career discovery for a learner who does not know their goal yet.
+
+        Agentic when a provider is configured: the model reasons over the
+        learner's signals and the real catalogue, grounded by the resolver.
+        Falls back to the curated deterministic engine, so the uncertain
+        learner is never answered with "tell me your goal first" — which is
+        exactly what they cannot do.
+        """
+        from app.services.discovery_service import CareerDiscoveryService
+
+        suggestions = await CareerDiscoveryService(self.session, llm).discover(
+            self.user_id, interests=[], free_text=free_text, top_k=3
+        )
+        return ToolResult(
+            "suggest_careers", True,
+            f"{len(suggestions)} career direction(s) suggested.",
+            {
+                "careers": [
+                    {
+                        "slug": s.slug,
+                        "title": s.title,
+                        "pitch": s.pitch,
+                        "score": s.score,
+                        "reasons": s.reasons,
+                        "target_skills": [
+                            {"skill_slug": t.skill_slug, "required_level": t.required_level}
+                            for t in s.target_skills
+                        ],
+                    }
+                    for s in suggestions
+                ]
+            },
+        )
+
     # --- 10 --------------------------------------------------------------
     async def explain_skill_relationship(
         self, skill_ref: str | None, related_ref: str | None

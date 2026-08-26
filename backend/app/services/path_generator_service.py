@@ -58,8 +58,10 @@ _RESOURCES_PER_MILESTONE = 2
 
 
 class PathGeneratorService(BaseService):
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(self, session: AsyncSession, llm: "LLMProvider | None" = None) -> None:
         super().__init__(session)
+        #: Used only to design role graphs for goals the catalogue cannot name.
+        self.llm = llm
         self.gap_service = SkillGapService(session)
         self.resources = ResourceRepository(session)
         self.assessments = AssessmentRepository(session)
@@ -117,38 +119,17 @@ class PathGeneratorService(BaseService):
         path = await self._persist(request, learner_id, roadmap, explicit_targets)
         return await self._roadmap_for(path.id, learner_id)
 
-    #: How proficient a goal skill must be for the goal to count as reached.
-    GOAL_TARGET_LEVEL = 0.8
-
     async def _targets_from_goal_text(self, goal_text: str | None) -> list[RequiredSkillInput]:
-        """Turn "machine learning engineer" into a target the engine can plan for.
+        """Any goal phrase -> a target vector, growing the graph when needed.
 
-        Raises rather than guessing when the goal does not name something the
-        catalogue knows: planning a roadmap toward a skill that does not exist
-        would produce a confident, empty path.
+        Delegated to RoleGraphService: exact catalogue match first, then the
+        model designs the role's skill graph (materialised deterministically),
+        then the curated nearest-role fallback — a 422 only when every layer
+        comes up empty.
         """
-        text = (goal_text or "").strip()
-        if not text:
-            raise ValidationError(
-                "Tell me the goal you want to plan for, or pick target skills.",
-                error_code="no_goal",
-            )
+        from app.services.role_graph_service import RoleGraphService
 
-        resolution = await SkillResolver(self.session).resolve(text)
-        if resolution.status == "matched" and resolution.skill is not None:
-            return [
-                RequiredSkillInput(
-                    skill_id=resolution.skill.id, required_level=self.GOAL_TARGET_LEVEL
-                )
-            ]
-
-        suggestions = ", ".join(c.name for c in resolution.candidates[:3])
-        detail = f" Did you mean: {suggestions}?" if suggestions else ""
-        raise ValidationError(
-            f"'{text}' doesn't match a skill in the catalogue, so I can't plan a "
-            f"route to it yet.{detail}",
-            error_code="goal_unresolved",
-        )
+        return await RoleGraphService(self.session, self.llm).targets_for_goal(goal_text)
 
     async def regenerate(
         self,

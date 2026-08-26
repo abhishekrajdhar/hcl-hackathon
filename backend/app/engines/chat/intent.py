@@ -20,6 +20,7 @@ class IntentKind(str, Enum):
     EXPLAIN_RECOMMENDATION = "explain_recommendation"
     EXPLAIN_PREREQUISITE = "explain_prerequisite"
     GENERAL_QUESTION = "general_question"
+    CAREER_DISCOVERY = "career_discovery"
     CAN_I_SKIP = "can_i_skip"
     NEXT_ACTION = "next_action"
     WEEKLY_PLAN = "weekly_plan"
@@ -49,6 +50,9 @@ class Intent:
     weekly_hours: int | None = None
     #: Skills the learner claims to have already ("comfortable with Python").
     known_skills: list[str] = field(default_factory=list)
+    #: What KIND of goal this is: career | internship | transition | skill.
+    #: None when the message is not a goal at all.
+    goal_type: str | None = None
 
 
 # Learners phrase a goal many ways, and onboarding is the one turn where
@@ -57,6 +61,46 @@ class Intent:
 # also accepts learning, building, working in, moving into and mastering.
 # Ordered alternatives, longest first, so "want to learn about X" does not
 # match the shorter "want to learn" and capture "about X".
+# --- goal intelligence -------------------------------------------------------
+# The diagram's "Goal Intelligence" node: a goal is not just a string, it has a
+# KIND, and the kind changes what the system should do next. Uncertainty is the
+# important one — it routes to career discovery instead of the gap engine,
+# which cannot plan toward "I don't know".
+_UNCERTAIN_RE = re.compile(
+    r"(?:i (?:don(?:'|\u2019)?t|do not) know what|not sure (?:what|which|where)|"
+    r"unsure (?:what|which|about)|no idea what|help me (?:decide|choose|figure out|pick)|"
+    r"can(?:'|\u2019)?t decide|what (?:career|role|path) (?:should|would|fits)|"
+    r"which (?:career|role|path)|confused about (?:my )?(?:career|direction|path)|"
+    r"explore (?:my )?(?:career )?options)",
+    re.IGNORECASE,
+)
+_TRANSITION_RE = re.compile(
+    r"(?:switch(?:ing)? (?:from|careers?|to)|transition(?:ing)? (?:from|into|to)|"
+    r"career change|move (?:from|out of) \w+|pivot(?:ing)? (?:from|to|into)|"
+    r"coming from a|background in \w+ but)",
+    re.IGNORECASE,
+)
+_INTERNSHIP_RE = re.compile(r"\bintern(?:ship)?s?\b", re.IGNORECASE)
+#: Career-goal cue: the goal names a role rather than a topic.
+_ROLE_WORD_RE = re.compile(
+    r"\b(?:engineer|scientist|analyst|developer|architect|researcher|specialist)\b",
+    re.IGNORECASE,
+)
+
+
+def classify_goal_type(text: str, goal_text: str | None) -> str | None:
+    """The kind of goal a message expresses. Pure and order-sensitive:
+    the more specific signals (internship, transition) win over the generic
+    career/skill split, and a message with no goal has no kind."""
+    if _INTERNSHIP_RE.search(text):
+        return "internship"
+    if _TRANSITION_RE.search(text):
+        return "transition"
+    if goal_text is None:
+        return None
+    return "career" if _ROLE_WORD_RE.search(goal_text) else "skill"
+
+
 _GOAL_VERBS = (
     r"want to (?:become|be)|want to learn(?: about)?|want to build(?: with)?|"
     r"want to work (?:in|with|on)|want to get into|want to move into|"
@@ -64,7 +108,15 @@ _GOAL_VERBS = (
     r"would like to (?:become|be|learn)|"
     r"goal is (?:to become|to be|to learn|)|"
     r"(?:'|\u2019)?d like to be(?:come)?|(?:'|\u2019)?m aiming to be(?:come)?|"
-    r"help me (?:become|learn)|looking to (?:become|learn)"
+    r"help me (?:become|learn)|looking to (?:become|learn)|"
+    # goal-with-a-kind phrasings: the goal follows an internship or a
+    # from-clause, e.g. "switch from web development to machine learning"
+    r"want an? internship in|looking for an? internship in|"
+    r"want to switch (?:from [a-z ]+? )?(?:to|into)|"
+    r"want to transition (?:from [a-z ]+? )?(?:to|into)|"
+    r"switch(?:ing)? (?:from [a-z ]+? )?(?:to|into)|"
+    r"transition(?:ing)? (?:from [a-z ]+? )?(?:to|into)|"
+    r"pivot(?:ing)? (?:from [a-z ]+? )?(?:to|into)"
 )
 _GOAL_RE = re.compile(
     rf"(?:i\s+)?(?:{_GOAL_VERBS})\s+(?:an?\s+)?"
@@ -342,8 +394,14 @@ def detect_intent(message: str) -> Intent:
     be, so none of them is lost.
     """
     intent = _classify(message)
+    # Uncertainty overrides a goal match: "I don't know what career fits me"
+    # must reach discovery, not be mis-parsed as setting the goal "fits me".
+    if intent.kind in (IntentKind.SET_GOAL, IntentKind.UNKNOWN, IntentKind.GENERAL_QUESTION) \
+            and _UNCERTAIN_RE.search(message):
+        intent = replace(intent, kind=IntentKind.CAREER_DISCOVERY, goal_text=None)
     return replace(
         intent,
         weekly_hours=extract_weekly_hours(message),
         known_skills=extract_known_skills(message),
+        goal_type=classify_goal_type(message, intent.goal_text),
     )

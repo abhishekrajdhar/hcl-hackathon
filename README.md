@@ -61,9 +61,28 @@ Docker Compose
 Recharts · Three.js (react-three-fiber) · Inter + Space Grotesk
 
 **Models** — LLM provider is `mock | claude | openai`, embeddings are
-`mock | sentence_transformer`, both chosen from settings and never hard-coded in
-callers. Both default to `mock`, so the whole stack runs in dev and CI with no
-API key and no torch.
+`mock | openai | sentence_transformer`, both chosen from settings and never
+hard-coded in callers. Both default to `mock`, so the whole stack runs in dev
+and CI with no API key and no torch.
+
+**Using OpenAI.** One key drives both halves. Put it in `backend/.env` (which
+is gitignored) or export it, then:
+
+```bash
+export OPENAI_API_KEY=sk-...
+./scripts/use-openai.sh
+```
+
+That sets `LLM_PROVIDER=openai` and `EMBEDDING_PROVIDER=openai`, recreates the
+API with the key passed through from your shell — never baked into the image or
+a tracked file — and re-embeds the catalogue, which is required because
+changing provider changes what the vectors mean.
+
+Worth knowing: `text-embedding-3-small` accepts a `dimensions` parameter, so
+the provider requests exactly `EMBEDDING_DIM` (384) and the vectors drop into
+the existing pgvector column — **no migration**, and switching back to `mock`
+stays a config change. Without a key the provider logs a warning and falls back
+to the mock rather than failing to boot.
 
 ## Quick start — Docker
 
@@ -266,6 +285,7 @@ The nine tools available to it:
 | `update_learning_progress` | Record a completion or score, adapt the path |
 | `get_goal_prerequisites` | What the goal rests on, split into met and unknown |
 | `explain_skill_relationship` | How one skill depends on another in the graph |
+| `suggest_careers` | Career directions for an uncertain learner (agentic, grounded) |
 
 ## The interface
 
@@ -311,6 +331,48 @@ same `GalaxyScene` with the demo graph, in ambient mode (drifting camera, no
 selection, pointer events passing through). Sections below are an engine spec
 sheet — numbered subsystems naming the actual modules, and the pipeline drawn
 as a signal chain.
+
+## Goal intelligence and career discovery
+
+A learner's first message is read for what KIND of goal it is — career,
+internship, transition, skill — and for uncertainty. "I don't know what I want
+to do" routes to **career discovery** instead of the gap engine, which cannot
+plan toward "I don't know".
+
+Both are **agentic with a validated floor**. With a provider configured
+(`LLM_PROVIDER=openai`), the model does the reasoning: it reads the goal
+utterance, and for uncertain learners it proposes career directions from the
+learner's signals and the real catalogue. What keeps it honest is the seam in
+`services/discovery_service.py`:
+
+```
+signals → LLM → schema-validated proposal → grounded against the skill graph
+        → unresolvable skills dropped, skill-less directions discarded
+        → deterministic fallback if nothing survives
+```
+
+The model may propose a career, but it cannot invent the skills it requires —
+every target skill is resolved against the catalogue, and each surviving
+direction carries the exact target-skill vector the path generator plans from.
+With no provider (or a failing one), a curated deterministic engine
+(`engines/discovery/careers.py`) answers instead: degraded, never down.
+
+Onboarding exposes all three intakes: describe the goal in a sentence, paste a
+resume (read by the same extraction seam), or "not sure yet" → discovery.
+
+**The graph grows to meet the goal.** The seeded catalogue cannot name every
+destination, so a goal it lacks ("backend developer") is not a dead end: the
+model designs that role's required-skill graph — reusing catalogue skills where
+they fit, proposing new ones only where the catalogue is missing them — and
+`services/role_graph_service.py` materialises the design with deterministic
+code. New skills are real rows marked `origin: role_graph`; every prerequisite
+edge goes through the cycle-checked graph API, so a cycle in the design is
+refused, never written; and a second learner naming the same role converges on
+the graph the first one grew. Milestones for skills with no catalogue content
+become self-study items, so the path still plans. The fallback ladder beneath
+it: exact catalogue match → model-designed graph → nearest curated role →
+a 422 that routes to career discovery (which onboarding turns into an
+automatic pivot rather than an error).
 
 ## Talking to it
 

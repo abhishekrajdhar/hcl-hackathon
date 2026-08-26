@@ -14,6 +14,7 @@ from app.core.logging import get_logger
 from app.embeddings.base import EmbeddingProvider
 from app.embeddings.cache import EmbeddingCache
 from app.embeddings.providers.mock import MockEmbeddingProvider
+from app.embeddings.providers.openai import OpenAIEmbeddingProvider
 from app.embeddings.providers.sentence_transformer import SentenceTransformerProvider
 
 logger = get_logger(__name__)
@@ -33,7 +34,18 @@ def build_provider(name: str) -> EmbeddingProvider:
             )
             return MockEmbeddingProvider()
         return SentenceTransformerProvider()
-    raise ValueError(f"Unknown embedding provider '{name}'. Choose mock or sentence_transformer.")
+    if key == "openai":
+        if not settings.OPENAI_API_KEY:
+            logger.warning(
+                "EMBEDDING_PROVIDER=openai but OPENAI_API_KEY is not set; falling "
+                "back to the mock provider so the backend can still run"
+            )
+            return MockEmbeddingProvider()
+        return OpenAIEmbeddingProvider()
+    raise ValueError(
+        f"Unknown embedding provider '{name}'. "
+        "Choose mock, sentence_transformer or openai."
+    )
 
 
 @functools.lru_cache

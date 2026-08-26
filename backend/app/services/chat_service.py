@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import uuid
+from dataclasses import replace
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -102,6 +103,7 @@ class ChatService(BaseService):
         await self.session.flush()
 
         intent = detect_intent(message)
+        intent = await self._refine_goal_reading(message, intent)
         # side-effecting intents (writes) are handled explicitly, not by the LLM
         if intent.kind == IntentKind.SET_GOAL and intent.goal_text:
             await self._set_goal(user_id, intent.goal_text)
@@ -173,6 +175,8 @@ class ChatService(BaseService):
             executor = ChatToolExecutor(self.session, user_id, self.embeddings)  # type: ignore[arg-type]
             if name == "search_resources":
                 results.append(await executor.search_resources(intent.query or intent.raw))
+            elif name == "suggest_careers":
+                results.append(await executor.suggest_careers(intent.raw, llm=self.llm))
             elif name == "explain_skill_relationship":
                 results.append(
                     await executor.explain_skill_relationship(
@@ -188,6 +192,36 @@ class ChatService(BaseService):
             else:
                 results.append(await getattr(executor, name)())
         return results
+
+    async def _refine_goal_reading(self, message: str, intent: Intent) -> Intent:
+        """Let the model refine goal understanding where the regex is weakest.
+
+        Only goal-shaped or unclassified turns are re-read — a score report or
+        a "show my path" is already unambiguous and costs nothing. The model's
+        reading can promote UNKNOWN to a goal or to career discovery, or fix a
+        mis-parsed goal phrase; when it fails or declines, the regex verdict
+        stands unchanged. Routing improves, and the floor never drops.
+        """
+        if intent.kind not in (
+            IntentKind.SET_GOAL, IntentKind.UNKNOWN, IntentKind.CAREER_DISCOVERY
+        ):
+            return intent
+
+        from app.services.discovery_service import CareerDiscoveryService
+
+        reading = await CareerDiscoveryService(self.session, self.llm).read_goal(message)
+        if reading is None:
+            return intent
+        if reading.uncertain:
+            return replace(intent, kind=IntentKind.CAREER_DISCOVERY, goal_text=None)
+        if reading.is_goal and reading.goal_text:
+            return replace(
+                intent,
+                kind=IntentKind.SET_GOAL,
+                goal_text=reading.goal_text,
+                goal_type=reading.goal_type or intent.goal_type,
+            )
+        return intent
 
     async def _set_goal(self, user_id: uuid.UUID, goal_text: str) -> None:
         service = ProfileService(self.session)
@@ -336,6 +370,7 @@ _TOOL_PLAN: dict[IntentKind, list[str]] = {
     IntentKind.SET_GOAL: ["get_learner_profile", "get_goal_prerequisites"],
     IntentKind.EXPLAIN_PREREQUISITE: ["explain_skill_relationship"],
     IntentKind.GENERAL_QUESTION: ["search_resources"],
+    IntentKind.CAREER_DISCOVERY: ["suggest_careers"],
     IntentKind.NEXT_ACTION: ["get_next_action"],
     IntentKind.WEEKLY_PLAN: ["get_current_learning_path", "get_progress"],
     IntentKind.EXPLAIN_RECOMMENDATION: ["get_recommendations"],

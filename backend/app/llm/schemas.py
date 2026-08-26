@@ -8,7 +8,7 @@ from the ORM — nothing here can write to the database.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -107,3 +107,81 @@ class GeneratedAssessment(BaseModel):
 
 def generated_assessment_schema() -> dict[str, Any]:
     return GeneratedAssessment.model_json_schema()
+
+
+# --- career discovery --------------------------------------------------------
+class CareerDirection(BaseModel):
+    """One career direction the model proposes for an uncertain learner.
+
+    `target_skills` are catalogue skill NAMES; they are resolved against the
+    real graph after validation, and any that do not resolve are dropped. A
+    direction whose skills all fail to resolve is discarded entirely — the
+    model may reason about careers, but it cannot invent the skills they
+    require.
+    """
+
+    title: str = Field(min_length=3, max_length=80)
+    pitch: str = Field(min_length=10, max_length=240)
+    #: Why THIS learner — must reference their stated signals, not generics.
+    why: str = Field(min_length=5, max_length=240)
+    target_skills: list[str] = Field(min_length=1, max_length=5)
+
+
+class CareerAdvice(BaseModel):
+    """Validated container for the model's career suggestions."""
+
+    careers: list[CareerDirection] = Field(min_length=1, max_length=5)
+
+
+def career_advice_json_schema() -> dict:
+    return CareerAdvice.model_json_schema()
+
+
+# --- goal intelligence -------------------------------------------------------
+class GoalReading(BaseModel):
+    """The model's reading of what a learner's message wants.
+
+    Used to route between goal-setting and career discovery; the deterministic
+    regex classifier remains the fallback, so a bad reading degrades to the
+    old behaviour rather than to nothing.
+    """
+
+    is_goal: bool
+    #: True when the learner is expressing uncertainty about direction.
+    uncertain: bool = False
+    goal_text: str | None = Field(default=None, max_length=120)
+    goal_type: Literal["career", "internship", "transition", "skill"] | None = None
+
+
+def goal_reading_json_schema() -> dict:
+    return GoalReading.model_json_schema()
+
+
+# --- role graph generation ---------------------------------------------------
+class RoleSkillSpec(BaseModel):
+    """One skill in a generated role graph.
+
+    Names are resolved against the catalogue afterwards; a name that does not
+    resolve becomes a NEW catalogue skill, so the model is told to reuse
+    existing names wherever they fit and invent only what is genuinely
+    missing. `prerequisites` may only reference catalogue skills or other
+    skills in this same spec.
+    """
+
+    name: str = Field(min_length=2, max_length=80)
+    required_level: float = Field(ge=0.3, le=1.0)
+    prerequisites: list[str] = Field(default_factory=list, max_length=4)
+    #: One of the catalogue's category names; used when the skill is new.
+    category: str | None = Field(default=None, max_length=80)
+    difficulty: int = Field(default=3, ge=1, le=5)
+
+
+class RoleGraphSpec(BaseModel):
+    """A generated target-skill graph for a role the catalogue does not name."""
+
+    role_title: str = Field(min_length=3, max_length=80)
+    skills: list[RoleSkillSpec] = Field(min_length=3, max_length=12)
+
+
+def role_graph_json_schema() -> dict:
+    return RoleGraphSpec.model_json_schema()

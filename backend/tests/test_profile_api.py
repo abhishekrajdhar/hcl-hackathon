@@ -346,7 +346,7 @@ async def test_ingest_draft_preview_and_apply(learner) -> None:  # type: ignore[
         got = await api.get(f"/profile/{uid}", headers=h)
         assert got.json()["profile"]["weekly_hours"] == 10
         assert set(got.json()["profile"]["preferred_modalities"]) == {"video", "project"}
-        assert got.json()["profile"]["extraction_model"] == "deterministic-stub-v1"
+        assert got.json()["profile"]["extraction_model"] == "deterministic-v2"
 
 
 # --- authorization ---------------------------------------------------------

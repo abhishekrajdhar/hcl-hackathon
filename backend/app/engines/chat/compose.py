@@ -43,6 +43,25 @@ def compose_reply(intent: Intent, results: list[ToolResult]) -> str:
             return rel.summary if rel else "I don't know that skill."
         return _compose_prerequisite_reply(rel)
 
+    if intent.kind == IntentKind.CAREER_DISCOVERY:
+        tool = tools.get("suggest_careers")
+        if not (tool and tool.available and tool.data.get("careers")):
+            return ("That's okay — plenty of people start here. Tell me what you enjoy "
+                    "(building things? language? images? numbers?) and I'll suggest "
+                    "some directions.")
+        careers = tool.data["careers"]
+        lines = []
+        for c in careers[:3]:
+            why = f" — {c['reasons'][0]}" if c.get("reasons") else ""
+            lines.append(f"{c['title']}: {c['pitch']}{why}")
+        top = careers[0]["title"]
+        return (
+            "No goal yet is a fine place to start. Based on what you've told me, "
+            "here are directions worth a look. " + " ".join(lines) +
+            f" Say \"I want to become a {top.lower()}\" (or any of these) and "
+            "I'll chart the route."
+        )
+
     if intent.kind == IntentKind.GENERAL_QUESTION:
         # Answered by the LLM in the service when one is configured. This is
         # the fallback for the mock provider: point at the catalogue rather

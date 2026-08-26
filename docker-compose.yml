@@ -50,6 +50,9 @@ services:
       REDIS_URL: redis://redis:6379/0
       # Redis now backs the shared query-embedding cache.
       EMBEDDING_CACHE_BACKEND: redis
+      # Passed through from your shell, never baked into the image or a tracked
+      # file. Unset is fine: both providers fall back to their mock.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     ports:
       - "${API_PORT:-8000}:8000"
     depends_on:

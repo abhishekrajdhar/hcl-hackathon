@@ -23,3 +23,33 @@ export function generatePath(userId: UUID, goalText: string): Promise<LearningPa
     body: { user_id: userId, goal_text: goalText, activate: true },
   });
 }
+
+// --- goal intelligence branches ---------------------------------------------
+
+export interface CareerSuggestion {
+  slug: string;
+  title: string;
+  pitch: string;
+  score: number;
+  reasons: string[];
+  target_skills: { skill_slug: string; required_level: number }[];
+}
+
+/** The uncertain branch: signals in, ranked career directions out. */
+export function discoverCareers(
+  interests: string[],
+  freeText: string,
+): Promise<{ count: number; careers: CareerSuggestion[] }> {
+  return request<{ count: number; careers: CareerSuggestion[] }>("/discovery/careers", {
+    method: "POST",
+    body: { interests, free_text: freeText, top_k: 3 },
+  });
+}
+
+/** Resume intake: paste text, the extractor reads it into the profile. */
+export function ingestResume(userId: UUID, text: string): Promise<unknown> {
+  return request<unknown>(`/profile/${userId}/ingest`, {
+    method: "POST",
+    body: { text, apply: true },
+  });
+}

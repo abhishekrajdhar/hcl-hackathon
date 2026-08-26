@@ -23,3 +23,4 @@ venv/
 # Node (frontend, later phase)
 node_modules/
 .next/
+tsconfig.tsbuildinfo

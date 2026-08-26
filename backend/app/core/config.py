@@ -63,7 +63,7 @@ class Settings(BaseSettings):
     # real semantic embeddings. EMBEDDING_DIM is pinned because it is the
     # pgvector column width — the mock produces vectors of exactly this size and
     # all-MiniLM-L6-v2 is 384, so they interoperate.
-    EMBEDDING_PROVIDER: Literal["mock", "sentence_transformer"] = "mock"
+    EMBEDDING_PROVIDER: Literal["mock", "sentence_transformer", "openai"] = "mock"
     EMBEDDING_DIM: int = 384
     EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
     EMBEDDING_BATCH_SIZE: int = 64
@@ -89,6 +89,9 @@ class Settings(BaseSettings):
 
     OPENAI_API_KEY: str | None = None
     OPENAI_MODEL: str = "gpt-4o-mini"
+    #: text-embedding-3-* accept a `dimensions` parameter, so EMBEDDING_DIM is
+    #: honoured and the pgvector column width never has to change.
+    OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"
     OPENAI_BASE_URL: str | None = None
 
     # --- Logging ---------------------------------------------------------

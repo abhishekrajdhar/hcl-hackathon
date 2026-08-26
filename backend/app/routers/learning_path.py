@@ -8,9 +8,10 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Depends, status
 
-from app.core.deps import CurrentUser, SessionDep
+from app.core.deps import CurrentUser, SessionDep, get_llm_provider_dep
+from app.llm.base import LLMProvider
 from app.models.enums import UserRole
 from app.schemas.learning_path import (
     GeneratePathRequest,
@@ -29,9 +30,12 @@ router = APIRouter(prefix="/learning-path", tags=["learning-path"])
     summary="Generate a prerequisite-aware, phased roadmap",
 )
 async def generate_path(
-    payload: GeneratePathRequest, session: SessionDep, current_user: CurrentUser
+    payload: GeneratePathRequest,
+    session: SessionDep,
+    current_user: CurrentUser,
+    llm: LLMProvider = Depends(get_llm_provider_dep),
 ) -> LearningPathRoadmap:
-    return await PathGeneratorService(session).generate(
+    return await PathGeneratorService(session, llm).generate(
         payload,
         requesting_user_id=current_user.id,
         is_admin=current_user.role == UserRole.ADMIN,
@@ -63,8 +67,9 @@ async def regenerate_path(
     payload: RegeneratePathRequest,
     session: SessionDep,
     current_user: CurrentUser,
+    llm: LLMProvider = Depends(get_llm_provider_dep),
 ) -> LearningPathRoadmap:
-    return await PathGeneratorService(session).regenerate(
+    return await PathGeneratorService(session, llm).regenerate(
         path_id,
         requesting_user_id=current_user.id,
         is_admin=current_user.role == UserRole.ADMIN,
