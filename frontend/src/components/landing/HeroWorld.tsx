@@ -5,8 +5,9 @@
 // would be easier; showing the real engine is the whole argument.
 //
 // It renders in ambient mode: the camera drifts, nothing is selectable, and
-// pointer events pass through to the page beneath so the 3D never steals a
-// click meant for the call to action.
+// pointer events pass through so the 3D never steals a click from the CTA.
+// It fills its own container rather than the viewport, so the copy beside it
+// keeps a clean, uncrowded column.
 
 import dynamic from "next/dynamic";
 import { demoGraph } from "@/lib/graph-demo";
@@ -23,17 +24,23 @@ export function HeroWorld() {
   return (
     <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
       <GalaxyScene model={demoGraph} selectedId={null} onSelect={noop} pulseIds={NOTHING} />
-      {/* Hold the world back so the type in front of it stays the subject. */}
+
+      {/* Feather the panel's edges so the world dissolves into the page
+          instead of ending on a hard rectangle. */}
       <div
         className="absolute inset-0"
         style={{
           background:
-            "linear-gradient(90deg, rgba(7,10,13,0.94) 0%, rgba(7,10,13,0.72) 38%, rgba(7,10,13,0.25) 65%, rgba(7,10,13,0.55) 100%)",
+            "linear-gradient(90deg, var(--void) 0%, rgba(7,10,13,0.4) 8%, transparent 22%)",
         }}
       />
       <div
-        className="absolute inset-x-0 bottom-0 h-40"
-        style={{ background: "linear-gradient(180deg, transparent, var(--void))" }}
+        className="absolute inset-x-0 top-0 h-24"
+        style={{ background: "linear-gradient(180deg, var(--void), transparent)" }}
+      />
+      <div
+        className="absolute inset-x-0 bottom-0 h-28"
+        style={{ background: "linear-gradient(0deg, var(--void), transparent)" }}
       />
     </div>
   );
