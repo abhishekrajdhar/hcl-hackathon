@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { clsx } from "@/lib/cn";
 import {
@@ -8,11 +9,13 @@ import {
   IconChart,
   IconChat,
   IconClipboard,
+  IconCompass,
   IconFlag,
   IconGraph,
   IconLayers,
   IconLogout,
   IconPath,
+  IconPin,
   IconSpark,
   IconTarget,
 } from "@/components/ui/icons";
@@ -31,6 +34,18 @@ const NAV = [
   { id: "assessments", label: "Assessments", icon: IconClipboard },
   { id: "assistant", label: "AI Coach", icon: IconChat },
   { id: "system", label: "System", icon: IconActivity },
+];
+
+/**
+ * Destinations rather than sections. Goal intelligence and career discovery
+ * are full flows, not panels on this page — and until they were listed here
+ * they were reachable only during first-run onboarding, so a learner who
+ * already had a profile had no way back to either. The rail is where the
+ * learner looks for everything else, so they belong in it.
+ */
+const ACTIONS = [
+  { href: "/onboarding?mode=describe", label: "Change My Goal", icon: IconPin },
+  { href: "/onboarding?mode=discover", label: "Explore Careers", icon: IconCompass },
 ];
 
 /**
@@ -166,6 +181,23 @@ function NavRail({ active }: { active: string }) {
             </a>
           );
         })}
+
+        <div className="mx-4 my-2 h-px bg-line" />
+
+        {ACTIONS.map((a) => (
+          <Link
+            key={a.href}
+            href={a.href}
+            className="group relative mx-2 flex items-center gap-3 rounded-sm px-[18px] py-2.5 text-text-3 transition-colors hover:text-cyan"
+          >
+            <a.icon className="h-[18px] w-[18px] shrink-0" />
+            {open && (
+              <span className="animate-rail-label whitespace-nowrap text-[12px] font-medium tracking-tight">
+                {a.label}
+              </span>
+            )}
+          </Link>
+        ))}
       </div>
     </nav>
   );

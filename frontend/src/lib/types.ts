@@ -88,6 +88,15 @@ export interface RoadmapItem {
   resource_id: UUID | null;
   assessment_id: UUID | null;
   is_optional: boolean;
+  // The catalogue record behind the item, carried inline so the plan is
+  // self-describing. Null on self-study reviews, which have no resource.
+  url: string | null;
+  provider: string | null;
+  description: string | null;
+  difficulty: number | null;
+  resource_type: string | null;
+  skills: string[];
+  prerequisites: string[];
 }
 
 export interface RoadmapMilestone {
@@ -536,4 +545,6 @@ export interface HealthReport {
   environment: string;
   uptime_seconds: number;
   components: Record<string, HealthComponent>;
+  /** Active AI providers; "mock" means deterministic fallbacks are answering. */
+  providers?: Record<string, string>;
 }

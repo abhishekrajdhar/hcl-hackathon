@@ -136,3 +136,75 @@ async def test_goal_reading_parses_and_survives_garbage(user_id) -> None:
         reading = await service_good.read_goal("i wanna do the vision stuff with cameras")
         assert reading is not None and reading.goal_type == "career"
         assert await service_bad.read_goal("anything") is None, "garbage -> regex verdict stands"
+
+
+# --- conversational discovery ------------------------------------------------
+async def test_interview_scripted_fallback_asks_then_ranks(user_id) -> None:
+    async with SessionLocal() as session:
+        service = CareerDiscoveryService(session, None)
+        q1, vector, careers = await service.interview([])
+        assert q1 is not None and "enjoy" in q1
+        assert careers == []
+        turns = [
+            (q1, "mostly building things"),
+            ("q2", "text and language"),
+            ("q3", "open questions and experimenting"),
+            ("q4", "I tolerate math"),
+        ]
+        done_q, vector, careers = await service.interview(turns)
+        assert done_q is None
+        assert vector["language"] > 0.8
+        assert careers[0].slug == "nlp-engineer"
+        assert careers[0].target_skills, "a ranked career must carry its target vector"
+
+
+async def test_interview_model_reading_drives_the_ranking(user_id) -> None:
+    reading = json.dumps({
+        "traits": {"visual": 0.95, "building": 0.7, "math": 0.5},
+        "next_question": None,
+        "ready": True,
+    })
+    async with SessionLocal() as session:
+        service = CareerDiscoveryService(session, MockProvider(responses=[reading]))
+        done_q, vector, careers = await service.interview([("q", "i love images")])
+    assert done_q is None
+    assert careers[0].slug == "computer-vision-engineer"
+
+
+async def test_interview_garbage_reading_falls_back_to_script(user_id) -> None:
+    async with SessionLocal() as session:
+        service = CareerDiscoveryService(session, MockProvider(responses=["garbage"]))
+        q, vector, careers = await service.interview([])
+    assert q is not None, "the scripted interview must carry on"
+
+
+async def test_interview_never_finishes_without_a_direction(user_id) -> None:
+    """Readiness needs traits behind it.
+
+    On an empty transcript the model has nothing to read, and it answers
+    honestly: no traits, ready=True. Taking that at face value ended the
+    interview on turn zero and handed the learner an empty list of careers to
+    choose from — a dead end on the first click. Readiness now requires a
+    vector to rank on.
+    """
+    reading = json.dumps({"traits": {}, "next_question": None, "ready": True})
+    async with SessionLocal() as session:
+        service = CareerDiscoveryService(session, MockProvider(responses=[reading]))
+        question, _vector, careers = await service.interview([])
+    assert question is not None, "an unreadable transcript must keep asking"
+    assert careers == []
+
+
+async def test_interview_at_turn_limit_still_ranks(user_id) -> None:
+    """The turn limit ends the conversation whatever the model returns."""
+    reading = json.dumps({
+        "traits": {"operations": 0.9, "building": 0.8},
+        "next_question": "one more?",
+        "ready": False,
+    })
+    turns = [(f"q{i}", f"a{i}") for i in range(CareerDiscoveryService.MAX_INTERVIEW_TURNS)]
+    async with SessionLocal() as session:
+        service = CareerDiscoveryService(session, MockProvider(responses=[reading]))
+        question, _vector, careers = await service.interview(turns)
+    assert question is None, "the limit outranks the model's wish to keep going"
+    assert careers, "a finished interview must offer directions"

@@ -471,6 +471,11 @@ class PathGeneratorService(BaseService):
             milestone = milestones[milestone_key]
             milestone.estimated_minutes += item.estimated_minutes
 
+            # The resource is already eager-loaded by `list_for_path`, so
+            # carrying its presentation fields costs nothing and spares clients
+            # a second lookup just to find the link for a course they were told
+            # to take.
+            resource = item.resource
             roadmap_item = RoadmapItem(
                 id=item.id,
                 kind=trace.get("kind", item.item_type.value),
@@ -480,6 +485,21 @@ class PathGeneratorService(BaseService):
                 resource_id=item.resource_id,
                 assessment_id=item.assessment_id,
                 is_optional=item.is_optional,
+                url=resource.url if resource else None,
+                provider=resource.provider if resource else None,
+                description=resource.description if resource else None,
+                difficulty=resource.difficulty if resource else None,
+                resource_type=resource.resource_type.value if resource else None,
+                skills=(
+                    [rs.skill.name for rs in resource.skills if rs.skill]
+                    if resource
+                    else []
+                ),
+                prerequisites=(
+                    [rp.skill.name for rp in resource.prerequisites if rp.skill]
+                    if resource
+                    else []
+                ),
             )
             kind = trace.get("kind")
             if kind == "assessment":

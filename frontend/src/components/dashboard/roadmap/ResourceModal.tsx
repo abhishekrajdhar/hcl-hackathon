@@ -51,6 +51,9 @@ export function ResourceModal({
 
   if (!resource) return null;
   const locked = resource.status === "locked";
+  // A relative URL is a route inside Pathwise (in-app projects and
+  // assessments), not somewhere on the web to send the learner off to.
+  const inApp = resource.url.startsWith("/");
 
   return (
     <Portal>
@@ -200,13 +203,26 @@ export function ResourceModal({
         {/* footer */}
         <div className="flex items-center justify-between gap-2 border-t border-border p-4">
           <span className="text-xs text-muted">
-            {locked ? "Unlocks when prerequisites are complete" : "Ready to start"}
+            {locked
+              ? "Unlocks when prerequisites are complete"
+              : inApp
+                ? "Taken here in Pathwise"
+                : resource.url
+                  ? "Ready to start"
+                  : "Work through this in your own time"}
           </span>
           {resource.url && (
-            <a href={resource.url} target="_blank" rel="noreferrer">
+            <a
+              href={resource.url}
+              // In-app items are Pathwise routes, not catalogue links — opening
+              // them in a new tab would spawn a second copy of the app.
+              target={inApp ? undefined : "_blank"}
+              rel={inApp ? undefined : "noreferrer"}
+              onClick={inApp ? onClose : undefined}
+            >
               <Button variant={locked ? "soft" : "primary"} size="md">
-                <IconExternal className="h-4 w-4" />
-                {locked ? "Preview" : "Start Learning"}
+                {!inApp && <IconExternal className="h-4 w-4" />}
+                {locked ? "Preview" : inApp ? "Open" : "Watch on " + (resource.provider || "site")}
                 {!locked && <IconArrow className="h-4 w-4" />}
               </Button>
             </a>

@@ -160,6 +160,38 @@ async def test_get_active_roadmap(api: AsyncClient) -> None:
     assert _order(got.json()) == _order(gen.json())
 
 
+async def test_roadmap_items_carry_their_resource(api: AsyncClient) -> None:
+    """Every catalogue-backed item must say where it lives.
+
+    The roadmap used to name a course without carrying its URL, so a client
+    could only link the handful of items that also appeared in the separate
+    recommendations response — the rest were dead titles the learner had no
+    way to open.
+    """
+    uid, email = await _learner_with_skills()
+    h = await _auth(api, email)
+    await api.post("/learning-path/generate", headers=h, json=_request(uid))
+    roadmap = (await api.get(f"/learning-path/{uid}", headers=h)).json()
+
+    items = [
+        item
+        for phase in roadmap["phases"]
+        for milestone in phase["milestones"]
+        for item in milestone["resources"]
+    ]
+    backed = [i for i in items if i["resource_id"]]
+    assert backed, "the plan should draw on the catalogue"
+    for item in backed:
+        assert item["url"], f"{item['title']} has no link to follow"
+        assert item["provider"], f"{item['title']} does not say who made it"
+        assert item["skills"], f"{item['title']} does not say what it teaches"
+
+    # Self-study reviews are not catalogue rows and carry nothing to follow.
+    for item in items:
+        if not item["resource_id"]:
+            assert item["url"] is None
+
+
 async def test_regenerate_supersedes(api: AsyncClient) -> None:
     uid, email = await _learner_with_skills()
     h = await _auth(api, email)

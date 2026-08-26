@@ -374,6 +374,31 @@ it: exact catalogue match → model-designed graph → nearest curated role →
 a 422 that routes to career discovery (which onboarding turns into an
 automatic pivot rather than an error).
 
+## Readiness, the interview, and evidence
+
+**Career readiness** (`GET /readiness`) is derived on demand from evidence
+that already exists — the active path's target vector against the skill twin,
+assessment history, project completion and pace — composed by the pure engine
+in `engines/readiness/report.py`. A dimension with no evidence is reported as
+missing and removed from the weighted composite rather than counted as zero,
+and the weakest evidenced dimension is named so the coach copy can point at
+it. Rendered inside the Overview panel.
+
+**Career discovery is a conversation**, not a form. `POST
+/discovery/interview` is stateless — the client carries the transcript — and
+splits the labour deliberately: the model reads the human (asking the next
+question, estimating the preference vector over a fixed trait taxonomy), while
+ranking careers from that vector is pure arithmetic in
+`engines/discovery/traits.py`. The same vector always yields the same
+ranking, whoever produced it. With no provider, a scripted four-question
+interview with keyword inference runs instead.
+
+**Every proficiency number carries its receipts.** `GET
+/me/skills/{id}/evidence` assembles the recorded entry, every assessment
+attempt that measured the skill, and every completed resource that taught it.
+The skill panel shows it as "How do I know this number?" — the guard against
+blindly trusting self-report.
+
 ## Talking to it
 
 The assistant can be driven by voice. The loop wraps the pipeline above without

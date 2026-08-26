@@ -53,3 +53,25 @@ export function ingestResume(userId: UUID, text: string): Promise<unknown> {
     body: { text, apply: true },
   });
 }
+
+// --- conversational discovery ------------------------------------------------
+
+export interface InterviewTurn {
+  question: string;
+  answer: string;
+}
+
+export interface InterviewStep {
+  done: boolean;
+  next_question: string | null;
+  traits: Record<string, number>;
+  careers: CareerSuggestion[];
+}
+
+/** One step of the discovery interview; the client carries the transcript. */
+export function interviewStep(turns: InterviewTurn[]): Promise<InterviewStep> {
+  return request<InterviewStep>("/discovery/interview", {
+    method: "POST",
+    body: { turns },
+  });
+}

@@ -75,17 +75,29 @@ export function useDashboardData(): State & {
       const data = buildDashboardData({ profile, roadmap, progress, recommendations, events: eventsPage });
       setState({ data, loading: false, error: null, isDemo: false, needsOnboarding: false });
     } catch (e) {
-      // Signed in but with no profile yet: this is a NEW learner, not an error.
-      // Showing them a stranger's demo journey as though it were theirs was the
-      // wrong call — they get onboarding instead, and the demo stays something
-      // you opt into.
-      const notFound = e instanceof ApiError && e.status === 404;
+      // Signed in but with no profile yet: a NEW learner, not an error. They
+      // go to onboarding.
+      if (e instanceof ApiError && e.status === 404) {
+        setState({
+          data: demoData,
+          loading: false,
+          error: null,
+          isDemo: true,
+          needsOnboarding: true,
+        });
+        return;
+      }
+      // Any OTHER failure must NOT fall back to the demo. Swapping a stranger's
+      // journey in for a signed-in learner's own data is worse than showing an
+      // error: it looks like real data, so a backend learner sees an ML roadmap
+      // and reasonably concludes the product is broken. Surface the failure and
+      // let them retry.
       setState({
         data: demoData,
         loading: false,
-        error: notFound ? null : e instanceof Error ? e.message : "Failed to load",
-        isDemo: true,
-        needsOnboarding: notFound,
+        error: e instanceof Error ? e.message : "Failed to load your data",
+        isDemo: false,
+        needsOnboarding: false,
       });
     }
   }, []);

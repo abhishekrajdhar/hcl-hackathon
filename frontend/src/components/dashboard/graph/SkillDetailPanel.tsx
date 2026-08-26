@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { IconArrow, IconCheck, IconLock, IconSpark, IconTarget } from "@/components/ui/icons";
-import { getToken, graphApi } from "@/lib/api";
+import { getToken, graphApi, meApi } from "@/lib/api";
+import type { SkillEvidence } from "@/lib/api/me";
 import { clsx } from "@/lib/cn";
 import { difficultyLabel, pct } from "@/lib/format";
 import {
@@ -56,11 +57,29 @@ export function SkillDetailPanel({
   // The graph only holds the part of the catalogue on this learner's route, so
   // "what does this unlock" is asked of the backend, which sees all of it.
   const [wider, setWider] = useState<GraphNode[] | null>(null);
+  // The receipts behind the proficiency number. 404 = unrecorded skill: the
+  // section simply doesn't render, because there is nothing to show.
+  const [evidence, setEvidence] = useState<SkillEvidence | null>(null);
 
   const bySlug = useMemo(
     () => new Map(proficiencies.map((p) => [p.slug, p])),
     [proficiencies],
   );
+
+  useEffect(() => {
+    setEvidence(null);
+    if (!skill || isDemo || !getToken()) return;
+    let gone = false;
+    meApi
+      .getSkillEvidence(skill.id)
+      .then((e) => {
+        if (!gone) setEvidence(e);
+      })
+      .catch(() => undefined);
+    return () => {
+      gone = true;
+    };
+  }, [skill, isDemo]);
 
   useEffect(() => {
     setWider(null);
@@ -158,6 +177,36 @@ export function SkillDetailPanel({
       <Question icon={<IconTarget className="h-3.5 w-3.5" />} title="Why do I need this?">
         <WhyText skill={skill} model={model} />
       </Question>
+
+      {evidence && evidence.evidence.length > 0 && (
+        <Question icon={<IconCheck className="h-3.5 w-3.5" />} title="How do I know this number?">
+          <ul className="space-y-1.5">
+            {evidence.evidence.slice(0, 4).map((item, i) => (
+              <li key={i} className="flex items-start gap-2 text-[11px] leading-snug">
+                <span
+                  className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full"
+                  style={{
+                    background:
+                      item.kind === "assessment"
+                        ? "var(--amber)"
+                        : item.kind === "completion"
+                          ? "var(--teal)"
+                          : "var(--steel)",
+                  }}
+                />
+                <span>
+                  <span className="text-fg">{item.label}</span>
+                  <span className="text-muted"> — {item.detail}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-1.5 text-[10px] text-muted">
+            Confidence {Math.round(evidence.confidence * 100)}% — assessments count for more
+            than self-report.
+          </p>
+        </Question>
+      )}
 
       <Question icon={<IconLock className="h-3.5 w-3.5" />} title="What do I need before this?">
         {prereqs.length === 0 ? (

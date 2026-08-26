@@ -5,8 +5,15 @@ import sys
 sys.path.insert(0, ".")
 from app.db.seeds.skill_graph import EDGES
 
+import os
+
+_HERE = os.path.dirname(os.path.abspath(__file__))
+
 cat = json.load(open("/tmp/catalogue.json"))
-inapp = json.load(open("/tmp/inapp.json"))
+# In-app projects and assessments are hand-authored source, not scraped output,
+# so they live in the repo. They used to be read from /tmp, where clearing the
+# temp directory would silently drop every one of them on the next regenerate.
+inapp = json.load(open(os.path.join(_HERE, "inapp_items.json"), encoding="utf-8"))
 
 # Hard prerequisites straight from the skill graph, so the catalogue and the
 # DAG cannot disagree about what gates what.

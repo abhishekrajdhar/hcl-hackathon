@@ -43,16 +43,47 @@ def _agentic_on(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(settings, "LLM_PROVIDER", "openai")
 
 
+@pytest_asyncio.fixture(scope="module", autouse=True)
+async def _clean_up_grown_skills():
+    """Remove the skills these tests grow.
+
+    They write real rows to the development database — without this, every run
+    leaves permanent junk in the learner's catalogue. Keyed on this module's
+    UNIQ suffix so a parallel run cannot delete another's rows.
+    """
+    yield
+    async with SessionLocal() as session:
+        ids = (await session.execute(
+            text("select id from skills where slug like :p"), {"p": f"%-{UNIQ}"}
+        )).scalars().all()
+        if ids:
+            await session.execute(
+                text("delete from prerequisites where source_skill_id = any(:ids) "
+                     "or prerequisite_skill_id = any(:ids)"),
+                {"ids": list(ids)},
+            )
+            await session.execute(
+                text("delete from skills where id = any(:ids)"), {"ids": list(ids)}
+            )
+            await session.commit()
+
+
 def _spec(skills: list[dict], title: str = "Backend Developer") -> str:
     return json.dumps({"role_title": title, "skills": skills})
 
 
 UNIQ = uuid.uuid4().hex[:6]
+# Deliberately nonsense names. Earlier revisions used "Operating Systems
+# {UNIQ}", which silently stopped creating anything once a real
+# operating-systems skill existed — the fuzzy resolver matched it, which is
+# correct behaviour that made the test assert the opposite. Novel tokens keep
+# this test about materialisation rather than about catalogue contents.
+NOVEL_A = f"Zorblatt Protocols {UNIQ}"
+NOVEL_B = f"Quandric Systems {UNIQ}"
 
 
 async def test_design_is_materialised_and_reused_skills_are_not_duplicated() -> None:
-    new_a = f"Operating Systems {UNIQ}"
-    new_b = f"Computer Networks {UNIQ}"
+    new_a, new_b = NOVEL_A, NOVEL_B
     spec = _spec([
         {"name": "Python", "required_level": 0.8, "prerequisites": [], "category": "Programming"},
         {"name": new_b, "required_level": 0.7, "prerequisites": ["Python"],
@@ -73,7 +104,7 @@ async def test_design_is_materialised_and_reused_skills_are_not_duplicated() -> 
         )).scalar_one()
         assert int(n) == 1
         # The new skills exist exactly once, marked with their origin.
-        for slug_base in ("operating-systems", "computer-networks"):
+        for slug_base in ("zorblatt-protocols", "quandric-systems"):
             rows = (await session.execute(
                 text("select extra from skills where slug = :s"),
                 {"s": f"{slug_base}-{UNIQ}"},
@@ -86,7 +117,7 @@ async def test_design_is_materialised_and_reused_skills_are_not_duplicated() -> 
                join skills s on s.id = p.source_skill_id
                join skills q on q.id = p.prerequisite_skill_id
                where s.slug = :src and q.slug = :pre"""),
-            {"src": f"operating-systems-{UNIQ}", "pre": f"computer-networks-{UNIQ}"},
+            {"src": f"zorblatt-protocols-{UNIQ}", "pre": f"quandric-systems-{UNIQ}"},
         )).scalar_one()
         assert int(edge) == 1
 
@@ -94,10 +125,10 @@ async def test_design_is_materialised_and_reused_skills_are_not_duplicated() -> 
 async def test_second_run_of_the_same_role_converges_not_duplicates() -> None:
     spec = _spec([
         {"name": "Python", "required_level": 0.8, "prerequisites": [], "category": "Programming"},
-        {"name": f"Computer Networks {UNIQ}", "required_level": 0.7,
+        {"name": NOVEL_B, "required_level": 0.7,
          "prerequisites": [], "category": "Programming"},
-        {"name": f"Operating Systems {UNIQ}", "required_level": 0.7,
-         "prerequisites": [f"Computer Networks {UNIQ}"], "category": "Programming"},
+        {"name": NOVEL_A, "required_level": 0.7,
+         "prerequisites": [NOVEL_B], "category": "Programming"},
     ])
     async with SessionLocal() as session:
         service = RoleGraphService(session, MockProvider(responses=[spec]))
@@ -107,7 +138,7 @@ async def test_second_run_of_the_same_role_converges_not_duplicates() -> None:
     async with SessionLocal() as session:
         n = (await session.execute(
             text("select count(*) from skills where slug = :s"),
-            {"s": f"operating-systems-{UNIQ}"},
+            {"s": f"zorblatt-protocols-{UNIQ}"},
         )).scalar_one()
         assert int(n) == 1, "re-running the role must resolve, not duplicate"
 

@@ -41,6 +41,14 @@ def build_provider(name: str) -> EmbeddingProvider:
                 "back to the mock provider so the backend can still run"
             )
             return MockEmbeddingProvider()
+        try:
+            import openai  # noqa: F401
+        except ImportError:
+            logger.warning(
+                "EMBEDDING_PROVIDER=openai but the 'openai' package is not "
+                "installed; falling back to the mock provider"
+            )
+            return MockEmbeddingProvider()
         return OpenAIEmbeddingProvider()
     raise ValueError(
         f"Unknown embedding provider '{name}'. "

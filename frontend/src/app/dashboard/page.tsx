@@ -11,6 +11,7 @@ import { SkillProgress } from "@/components/dashboard/SkillProgress";
 import { KnowledgeGraph } from "@/components/dashboard/graph/KnowledgeGraph";
 import { Universe } from "@/components/dashboard/universe/Universe";
 import { StatusHud } from "@/components/dashboard/StatusHud";
+import { DemoBanner, LoadErrorBanner } from "@/components/dashboard/DataBanner";
 import { Milestones } from "@/components/dashboard/Milestones";
 import { Recommendations } from "@/components/dashboard/Recommendations";
 import { Assessments } from "@/components/dashboard/Assessments";
@@ -27,7 +28,7 @@ function DashboardView() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, ready, signOut } = useAuth();
-  const { data, loading, isDemo, needsOnboarding, reload, applyAdaptive } = useDashboardData();
+  const { data, loading, error, isDemo, needsOnboarding, reload, applyAdaptive } = useDashboardData();
   // ?demo=1 lets the login page hand someone straight into the bundled dataset
   // without an account.
   const demoMode = searchParams.get("demo") === "1";
@@ -82,14 +83,31 @@ function DashboardView() {
           }}
           hud={<StatusHud data={data} />}
         >
-          {/* The world first, full-bleed and edge to edge — the page opens
-              inside it rather than scrolling down to find it. */}
-          <div id="universe" className="scroll-mt-12">
-            <Universe data={data} />
-          </div>
+          {error ? (
+            <div className="mx-auto max-w-[1400px] px-4 pt-6 lg:px-8">
+              <LoadErrorBanner message={error} onRetry={reload} />
+            </div>
+          ) : (
+            <>
+              {isDemo && (
+                <div className="mx-auto max-w-[1400px] px-4 pt-4 lg:px-8">
+                  <DemoBanner />
+                </div>
+              )}
+              {/* The world first, full-bleed and edge to edge — the page opens
+                  inside it rather than scrolling down to find it. */}
+              <div id="universe" className="scroll-mt-12">
+                <Universe data={data} />
+              </div>
+            </>
+          )}
 
           {/* Everything below is the briefing on that world. */}
-          <div className="mx-auto max-w-[1400px] space-y-4 px-4 pt-4 lg:px-8 lg:pt-6">
+          <div
+            className={`mx-auto max-w-[1400px] space-y-4 px-4 pt-4 lg:px-8 lg:pt-6 ${
+              error ? "hidden" : ""
+            }`}
+          >
             <div id="overview" className="scroll-mt-16">
               <Overview data={data} />
             </div>

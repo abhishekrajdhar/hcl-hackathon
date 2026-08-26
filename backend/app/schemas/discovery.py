@@ -33,3 +33,24 @@ class CareerSuggestionRead(BaseModel):
 class CareerDiscoveryResponse(BaseModel):
     count: int
     careers: list[CareerSuggestionRead]
+
+
+# --- conversational discovery ------------------------------------------------
+class InterviewTurnInput(BaseModel):
+    question: str = Field(max_length=300)
+    answer: str = Field(min_length=1, max_length=1000)
+
+
+class InterviewRequest(BaseModel):
+    """The whole conversation so far — the backend keeps no interview state."""
+
+    turns: list[InterviewTurnInput] = Field(default_factory=list, max_length=8)
+
+
+class InterviewResponse(BaseModel):
+    done: bool
+    next_question: str | None
+    #: The learner's preference vector as currently estimated (0..1 per trait).
+    traits: dict[str, float]
+    #: Ranked careers; empty until `done`.
+    careers: list[CareerSuggestionRead]

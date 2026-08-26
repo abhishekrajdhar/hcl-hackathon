@@ -87,10 +87,39 @@ export function SystemStatus() {
         }
       />
       <CardBody className="space-y-4">
+        {health?.providers && (health.providers.llm === "mock" || health.providers.embeddings === "mock") && (
+          <div className="flex items-start gap-2.5 border-l-2 border-amber py-1.5 pl-3">
+            <p className="text-[12px] leading-relaxed text-text-2">
+              <span className="font-medium text-amber">AI is running on the deterministic
+              fallback</span>{" "}
+              (LLM: {health.providers.llm}, embeddings: {health.providers.embeddings}).
+              Interviews, career advice and coach replies come from curated rules, not a
+              model. To go live:{" "}
+              <code className="text-[11px] text-text">
+                export OPENAI_API_KEY=sk-… && ./scripts/use-openai.sh
+              </code>
+            </p>
+          </div>
+        )}
+
         {health && (
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
             <Meta label="API" value={`${health.app} ${health.version}`} />
             <Meta label="Environment" value={health.environment} />
+            {health.providers && (
+              <>
+                <Meta
+                  label="LLM"
+                  value={health.providers.llm}
+                  tone={health.providers.llm === "mock" ? "bad" : "ok"}
+                />
+                <Meta
+                  label="Embeddings"
+                  value={health.providers.embeddings}
+                  tone={health.providers.embeddings === "mock" ? "bad" : "ok"}
+                />
+              </>
+            )}
             {Object.entries(health.components).map(([name, c]) => (
               <Meta
                 key={name}

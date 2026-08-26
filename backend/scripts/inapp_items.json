@@ -1,0 +1,499 @@
+[
+ {
+  "external_id": "py-project-cli",
+  "title": "Build a Command-Line To-Do App",
+  "type": "project",
+  "difficulty": 2,
+  "hours": 6.0,
+  "desc": "Apply core Python by building a persistent CLI to-do application.",
+  "teaches": [
+   [
+    "python",
+    0.4,
+    0.8,
+    true
+   ]
+  ],
+  "prereqs": [
+   [
+    "python",
+    0.3
+   ]
+  ],
+  "quality": 0.8,
+  "modality": "project"
+ },
+ {
+  "external_id": "py-assessment-core",
+  "title": "Python Fundamentals Assessment",
+  "type": "assessment",
+  "difficulty": 2,
+  "hours": 1.0,
+  "desc": "Diagnostic quiz covering data types, control flow and functions.",
+  "teaches": [
+   [
+    "python",
+    0.0,
+    0.7,
+    true
+   ]
+  ],
+  "prereqs": [],
+  "quality": 0.85,
+  "modality": "interactive"
+ },
+ {
+  "external_id": "stats-project-ab",
+  "title": "Run an A/B Test End to End",
+  "type": "project",
+  "difficulty": 3,
+  "hours": 8.0,
+  "desc": "Design, run and analyse an A/B test on a sample dataset.",
+  "teaches": [
+   [
+    "statistics",
+    0.5,
+    0.85,
+    true
+   ]
+  ],
+  "prereqs": [
+   [
+    "statistics",
+    0.4
+   ]
+  ],
+  "quality": 0.79,
+  "modality": "project"
+ },
+ {
+  "external_id": "ml-project-churn",
+  "title": "Predict Customer Churn",
+  "type": "project",
+  "difficulty": 3,
+  "hours": 12.0,
+  "desc": "Build, evaluate and tune a churn-prediction classifier.",
+  "teaches": [
+   [
+    "machine-learning",
+    0.5,
+    0.8,
+    true
+   ],
+   [
+    "model-evaluation",
+    0.4,
+    0.7,
+    false
+   ]
+  ],
+  "prereqs": [
+   [
+    "machine-learning",
+    0.4
+   ]
+  ],
+  "quality": 0.82,
+  "modality": "project"
+ },
+ {
+  "external_id": "ml-assessment",
+  "title": "Machine Learning Concepts Assessment",
+  "type": "assessment",
+  "difficulty": 3,
+  "hours": 1.5,
+  "desc": "Checkpoint on bias-variance, metrics and core algorithms.",
+  "teaches": [
+   [
+    "machine-learning",
+    0.0,
+    0.8,
+    true
+   ]
+  ],
+  "prereqs": [
+   [
+    "machine-learning",
+    0.3
+   ]
+  ],
+  "quality": 0.86,
+  "modality": "interactive"
+ },
+ {
+  "external_id": "pytorch-project-classifier",
+  "title": "Train an Image Classifier in PyTorch",
+  "type": "project",
+  "difficulty": 4,
+  "hours": 10.0,
+  "desc": "Build and train a CNN image classifier from scratch in PyTorch.",
+  "teaches": [
+   [
+    "pytorch",
+    0.4,
+    0.8,
+    true
+   ],
+   [
+    "cnn",
+    0.3,
+    0.6,
+    false
+   ]
+  ],
+  "prereqs": [
+   [
+    "pytorch",
+    0.3
+   ],
+   [
+    "deep-learning",
+    0.4
+   ]
+  ],
+  "quality": 0.83,
+  "modality": "project"
+ },
+ {
+  "external_id": "cv-project-detection",
+  "title": "Object Detection with YOLO",
+  "type": "project",
+  "difficulty": 5,
+  "hours": 14.0,
+  "desc": "Fine-tune a YOLO model for a custom object-detection task.",
+  "teaches": [
+   [
+    "object-detection",
+    0.4,
+    0.8,
+    true
+   ],
+   [
+    "computer-vision",
+    0.5,
+    0.8,
+    false
+   ]
+  ],
+  "prereqs": [
+   [
+    "computer-vision",
+    0.5
+   ]
+  ],
+  "quality": 0.81,
+  "modality": "project"
+ },
+ {
+  "external_id": "nlp-project-sentiment",
+  "title": "Build a Sentiment Analyzer",
+  "type": "project",
+  "difficulty": 3,
+  "hours": 8.0,
+  "desc": "Train and deploy a text-sentiment classifier.",
+  "teaches": [
+   [
+    "nlp-fundamentals",
+    0.4,
+    0.75,
+    true
+   ]
+  ],
+  "prereqs": [
+   [
+    "nlp-fundamentals",
+    0.4
+   ]
+  ],
+  "quality": 0.78,
+  "modality": "project"
+ },
+ {
+  "external_id": "llm-project-rag",
+  "title": "Build a Retrieval-Augmented Chatbot",
+  "type": "project",
+  "difficulty": 5,
+  "hours": 16.0,
+  "desc": "Ground an LLM on your own documents with a RAG pipeline.",
+  "teaches": [
+   [
+    "rag-systems",
+    0.4,
+    0.85,
+    true
+   ],
+   [
+    "large-language-models",
+    0.5,
+    0.8,
+    false
+   ]
+  ],
+  "prereqs": [
+   [
+    "large-language-models",
+    0.5
+   ]
+  ],
+  "quality": 0.84,
+  "modality": "project"
+ },
+ {
+  "external_id": "llm-assessment",
+  "title": "LLM Fundamentals Assessment",
+  "type": "assessment",
+  "difficulty": 4,
+  "hours": 1.0,
+  "desc": "Checkpoint on tokenization, prompting, context windows and evaluation.",
+  "teaches": [
+   [
+    "large-language-models",
+    0.0,
+    0.8,
+    true
+   ]
+  ],
+  "prereqs": [
+   [
+    "large-language-models",
+    0.3
+   ]
+  ],
+  "quality": 0.85,
+  "modality": "interactive"
+ },
+ {
+  "external_id": "mlops-project-deploy",
+  "title": "Deploy and Monitor a Model API",
+  "type": "project",
+  "difficulty": 4,
+  "hours": 12.0,
+  "desc": "Containerize, deploy and add monitoring to a model-serving API.",
+  "teaches": [
+   [
+    "model-deployment",
+    0.4,
+    0.8,
+    true
+   ],
+   [
+    "ml-monitoring",
+    0.3,
+    0.6,
+    false
+   ]
+  ],
+  "prereqs": [
+   [
+    "mlops-fundamentals",
+    0.4
+   ],
+   [
+    "docker-containers",
+    0.4
+   ]
+  ],
+  "quality": 0.82,
+  "modality": "project"
+ },
+ {
+  "external_id": "backend-project-rest-api",
+  "title": "Build a REST API with Persistence",
+  "type": "project",
+  "difficulty": 3,
+  "hours": 10.0,
+  "desc": "Design and build an HTTP API backed by a database: routing, validation, error handling and persistence.",
+  "teaches": [
+   [
+    "python",
+    0.5,
+    0.85,
+    true
+   ],
+   [
+    "testing-and-debugging",
+    0.3,
+    0.6,
+    false
+   ]
+  ],
+  "prereqs": [
+   [
+    "python",
+    0.35
+   ]
+  ],
+  "quality": 0.83,
+  "modality": "project"
+ },
+ {
+  "external_id": "net-project-http-server",
+  "title": "Write an HTTP Server from Sockets",
+  "type": "project",
+  "difficulty": 4,
+  "hours": 8.0,
+  "desc": "Implement a working HTTP server directly on TCP sockets to see the protocol stack from the bottom up.",
+  "teaches": [
+   [
+    "computer-networks",
+    0.4,
+    0.8,
+    true
+   ],
+   [
+    "operating-systems",
+    0.3,
+    0.6,
+    false
+   ]
+  ],
+  "prereqs": [
+   [
+    "computer-networks",
+    0.35
+   ],
+   [
+    "python",
+    0.35
+   ]
+  ],
+  "quality": 0.8,
+  "modality": "project"
+ },
+ {
+  "external_id": "test-project-suite",
+  "title": "Add a Test Suite to an Untested Codebase",
+  "type": "project",
+  "difficulty": 3,
+  "hours": 6.0,
+  "desc": "Take working but untested code and cover it: unit tests, fixtures, edge cases and a failing-test-first bug fix.",
+  "teaches": [
+   [
+    "testing-and-debugging",
+    0.4,
+    0.85,
+    true
+   ]
+  ],
+  "prereqs": [
+   [
+    "python",
+    0.3
+   ]
+  ],
+  "quality": 0.82,
+  "modality": "project"
+ },
+ {
+  "external_id": "shell-project-automation",
+  "title": "Automate a Workflow in Bash",
+  "type": "project",
+  "difficulty": 2,
+  "hours": 5.0,
+  "desc": "Replace a repetitive manual task with a robust shell script: arguments, error handling and exit codes.",
+  "teaches": [
+   [
+    "shell-scripting",
+    0.4,
+    0.8,
+    true
+   ],
+   [
+    "operating-systems",
+    0.2,
+    0.5,
+    false
+   ]
+  ],
+  "prereqs": [],
+  "quality": 0.78,
+  "modality": "project"
+ },
+ {
+  "external_id": "ui-project-redesign",
+  "title": "Design and Prototype an App Screen",
+  "type": "project",
+  "difficulty": 2,
+  "hours": 6.0,
+  "desc": "Take a real screen, rebuild its hierarchy and typography, and prototype the interaction.",
+  "teaches": [
+   [
+    "user-interface-design",
+    0.4,
+    0.8,
+    true
+   ]
+  ],
+  "prereqs": [],
+  "quality": 0.78,
+  "modality": "project"
+ },
+ {
+  "external_id": "game-project-first-game",
+  "title": "Ship a Small Playable Game",
+  "type": "project",
+  "difficulty": 3,
+  "hours": 12.0,
+  "desc": "Build a complete small game in an engine: player control, one core mechanic, win and lose states.",
+  "teaches": [
+   [
+    "game-development-frameworks",
+    0.4,
+    0.8,
+    true
+   ],
+   [
+    "game-design-principles",
+    0.3,
+    0.6,
+    false
+   ]
+  ],
+  "prereqs": [
+   [
+    "game-development-frameworks",
+    0.35
+   ]
+  ],
+  "quality": 0.8,
+  "modality": "project"
+ },
+ {
+  "external_id": "os-assess-fundamentals",
+  "title": "Operating Systems Assessment",
+  "type": "assessment",
+  "difficulty": 3,
+  "hours": 0.5,
+  "desc": "Check your grasp of processes, threads, scheduling and memory.",
+  "teaches": [
+   [
+    "operating-systems",
+    0.3,
+    0.7,
+    true
+   ]
+  ],
+  "prereqs": [],
+  "quality": 0.8,
+  "modality": "interactive"
+ },
+ {
+  "external_id": "net-assess-fundamentals",
+  "title": "Computer Networks Assessment",
+  "type": "assessment",
+  "difficulty": 3,
+  "hours": 0.5,
+  "desc": "Check your grasp of the layered model, addressing and routing.",
+  "teaches": [
+   [
+    "computer-networks",
+    0.3,
+    0.7,
+    true
+   ]
+  ],
+  "prereqs": [],
+  "quality": 0.8,
+  "modality": "interactive"
+ }
+]

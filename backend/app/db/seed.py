@@ -94,6 +94,7 @@ async def seed_skill_graph() -> None:
 
         # --- skills ---
         created_skills = 0
+        promoted_skills = 0
         for seed in SKILLS:
             existing = await skills.get_by_slug(seed.slug)
             if existing is None:
@@ -109,6 +110,20 @@ async def seed_skill_graph() -> None:
                     }
                 )
                 created_skills += 1
+            elif (existing.extra or {}).get("origin") == "role_graph":
+                # The route designer creates skills at runtime when a goal needs
+                # one the catalogue lacks, with a placeholder description and a
+                # catch-all category. Once that skill is curated here, the
+                # curated definition is better than the model's guess — without
+                # this the row keeps its placeholder forever, because the seeder
+                # only ever created skills and never revisited them.
+                existing.name = seed.name
+                existing.description = seed.description
+                existing.category_id = category_ids[seed.category]
+                existing.difficulty = seed.difficulty
+                existing.aliases = list(seed.aliases)
+                existing.extra = {**(existing.extra or {}), **seed.extra, "origin": "seed"}
+                promoted_skills += 1
         await session.commit()
 
         logger.info(
@@ -116,6 +131,7 @@ async def seed_skill_graph() -> None:
             extra={
                 "categories_created": created_categories,
                 "skills_created": created_skills,
+                "skills_promoted": promoted_skills,
                 "categories_total": len(CATEGORIES),
                 "skills_total": len(SKILLS),
             },

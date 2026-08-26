@@ -5,14 +5,25 @@
 // goal, the time budget and any existing skills out of one sentence, then the
 // generator plans the route to it.
 
-import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { ApiError, auth, onboardingApi } from "@/lib/api";
-import type { CareerSuggestion } from "@/lib/api/onboarding";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
+import { ApiError, api, auth, onboardingApi } from "@/lib/api";
+import type { CareerSuggestion, InterviewTurn } from "@/lib/api/onboarding";
 import { IconArrow, IconSpark } from "@/components/ui/icons";
 import { clsx } from "@/lib/cn";
 
 type Stage = "describe" | "discover" | "resume" | "confirm" | "building";
+
+/** The profile as written, or null when there isn't one yet. Both the goal and
+ *  the extracted skills are read back from the server rather than re-parsed
+ *  here, so the UI and the engine never disagree about what was heard. */
+async function profileOf(userId: string) {
+  try {
+    return await api.getFullProfile(userId);
+  } catch {
+    return null;
+  }
+}
 
 const EXAMPLES = [
   "I want to become a machine learning engineer. I have about 8 hours a week and I already know Python.",
@@ -22,7 +33,14 @@ const EXAMPLES = [
 
 export function Onboarding() {
   const router = useRouter();
-  const [stage, setStage] = useState<Stage>("describe");
+  // `?mode=discover` opens straight into career discovery. The dashboard rail
+  // links here, so a learner who already has a goal can re-enter either branch
+  // directly instead of retracing the first-run flow.
+  const mode = useSearchParams().get("mode");
+  const [stage, setStage] = useState<Stage>(mode === "discover" ? "discover" : "describe");
+  /** The goal the profile already holds, if any — this visit is a change of
+   *  direction rather than first contact, and the copy should say so. */
+  const [currentGoal, setCurrentGoal] = useState<string | null>(null);
   const [text, setText] = useState("");
   const [reply, setReply] = useState<string | null>(null);
   const [goal, setGoal] = useState<string | null>(null);
@@ -30,7 +48,28 @@ export function Onboarding() {
   const [busy, setBusy] = useState(false);
   const [signals, setSignals] = useState("");
   const [careers, setCareers] = useState<CareerSuggestion[] | null>(null);
+  const [turns, setTurns] = useState<InterviewTurn[]>([]);
+  const [interviewQ, setInterviewQ] = useState<string | null>(null);
   const [resume, setResume] = useState("");
+
+  // Read the existing goal once, so returning learners see what they are about
+  // to replace. Failure is silent: not having a goal is the normal first-run
+  // case, not an error worth showing.
+  useEffect(() => {
+    let live = true;
+    void (async () => {
+      try {
+        const me = await auth.me();
+        const profile = await profileOf(me.id);
+        if (live) setCurrentGoal(profile?.profile?.target_role ?? null);
+      } catch {
+        /* signed out or brand new — nothing to show */
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, []);
 
   /** Step 1 — the coach reads the sentence and writes the profile. */
   const describe = async (message: string) => {
@@ -44,9 +83,7 @@ export function Onboarding() {
       // The profile now holds the goal; read it back rather than re-parsing
       // the sentence here, so the UI and the engine agree on what was heard.
       const me = await auth.me();
-      const profile = await fetch(`/api/v1/profile/${me.id}`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("lpr_token")}` },
-      }).then((r) => (r.ok ? r.json() : null));
+      const profile = await profileOf(me.id);
       setGoal(profile?.profile?.target_role ?? null);
       setStage("confirm");
     } catch (e) {
@@ -60,15 +97,26 @@ export function Onboarding() {
     }
   };
 
-  /** The uncertain branch: signals in, ranked directions out. */
-  const discover = async () => {
+  /** The uncertain branch is a short interview: the coach asks, the learner
+   *  answers in their own words, and after a few turns the preference vector
+   *  ranks careers. The transcript lives here; the backend is stateless. */
+  const advanceInterview = async (answer?: string) => {
     setBusy(true);
     setError(null);
+    const nextTurns =
+      answer && interviewQ ? [...turns, { question: interviewQ, answer }] : turns;
     try {
-      const res = await onboardingApi.discoverCareers([], signals);
-      setCareers(res.careers);
+      const step = await onboardingApi.interviewStep(nextTurns);
+      setTurns(nextTurns);
+      setSignals("");
+      if (step.done) {
+        setInterviewQ(null);
+        setCareers(step.careers);
+      } else {
+        setInterviewQ(step.next_question);
+      }
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Couldn't fetch career directions.");
+      setError(e instanceof ApiError ? e.message : "Couldn't reach the interview.");
     } finally {
       setBusy(false);
     }
@@ -92,13 +140,11 @@ export function Onboarding() {
     try {
       const me = await auth.me();
       await onboardingApi.ingestResume(me.id, resume.trim());
-      const profile = await fetch(`/api/v1/profile/${me.id}`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("lpr_token")}` },
-      }).then((r) => (r.ok ? r.json() : null));
+      const profile = await profileOf(me.id);
       const heardGoal = profile?.profile?.target_role ?? null;
       const skills = (profile?.skills ?? [])
-        .map((sk: { skill?: { name?: string } }) => sk.skill?.name)
-        .filter(Boolean);
+        .map((sk) => sk.skill?.name)
+        .filter((name): name is string => Boolean(name));
       setGoal(heardGoal);
       setReply(
         heardGoal
@@ -129,11 +175,12 @@ export function Onboarding() {
       // career discovery is for. Pivot there with the goal as the signal,
       // instead of stranding the learner on an error under a "Got it".
       if (e instanceof ApiError && e.code === "goal_unresolved") {
-        setSignals(goal);
         setCareers(null);
+        setTurns([{ question: "What are you aiming for?", answer: goal }]);
+        setInterviewQ(null);
         setStage("discover");
-        setError("I couldn't map that goal exactly — here are close directions instead.");
-        void discoverWith(goal);
+        setError("I couldn't map that goal exactly — let's find the closest direction.");
+        void advanceInterview();
         return;
       }
       setStage("confirm");
@@ -145,15 +192,6 @@ export function Onboarding() {
     }
   };
 
-  /** Discovery seeded with a specific phrase (used by the pivot above). */
-  const discoverWith = async (seed: string) => {
-    try {
-      const res = await onboardingApi.discoverCareers([], seed);
-      setCareers(res.careers);
-    } catch {
-      /* the discover stage's own button remains as the retry */
-    }
-  };
 
   return (
     <main className="relative grid min-h-screen place-items-center px-6 py-16">
@@ -168,6 +206,16 @@ export function Onboarding() {
 
       <div className="relative w-full max-w-[600px]">
         <Steps stage={stage} />
+
+        {/* A learner arriving from the rail already has a destination. Say what
+            it is, so "change my goal" never silently discards one. */}
+        {currentGoal && stage !== "building" && (
+          <p className="mt-5 border-l-2 border-amber/60 py-1 pl-3 text-[12px] text-text-2">
+            You&apos;re currently aiming at{" "}
+            <span className="text-amber">{currentGoal}</span>. Choosing a new goal
+            replaces it — your recorded skills and progress stay.
+          </p>
+        )}
 
         <div className="hud hud-bracket mt-6 p-7">
           {stage === "describe" && (
@@ -236,19 +284,19 @@ export function Onboarding() {
               <h1 className="display mt-3 text-[26px] font-semibold leading-tight">
                 Let&apos;s find a direction.
               </h1>
-              <p className="mt-3 text-[13px] leading-relaxed text-text-2">
-                Tell me what you enjoy — building things, language, images,
-                numbers, anything. I&apos;ll rank career directions by fit, with
-                the evidence for each.
-              </p>
 
-              <textarea
-                value={signals}
-                onChange={(e) => setSignals(e.target.value)}
-                rows={3}
-                placeholder="I like writing, languages and chatbots…"
-                className="mt-5 w-full resize-none border border-line bg-panel-2/60 px-3.5 py-3 text-[13px] leading-relaxed text-text outline-none transition-colors placeholder:text-text-3 focus:border-cyan/60"
-              />
+              {/* Transcript so far — the interview is a conversation, and the
+                  learner should see what it has heard. */}
+              {turns.length > 0 && (
+                <div className="mt-4 space-y-2">
+                  {turns.map((t, i) => (
+                    <div key={i} className="border-l-2 border-line pl-3">
+                      <p className="text-[11px] text-text-3">{t.question}</p>
+                      <p className="text-[12px] text-text">{t.answer}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {error && <Alert>{error}</Alert>}
 
@@ -264,7 +312,9 @@ export function Onboarding() {
                         <span className="display text-[15px] font-semibold text-text group-hover:text-cyan">
                           {c.title}
                         </span>
-                        {c.score > 0 && <span className="label-meta text-cyan">fit {c.score}</span>}
+                        {c.score > 0 && (
+                          <span className="label-meta text-cyan">fit {Math.round(c.score)}%</span>
+                        )}
                       </div>
                       <p className="mt-1.5 text-[12px] leading-relaxed text-text-2">{c.pitch}</p>
                       {c.reasons[0] && (
@@ -274,22 +324,63 @@ export function Onboarding() {
                   ))}
                   <p className="label-meta pt-1">Pick one and I&apos;ll chart the route to it.</p>
                 </div>
+              ) : interviewQ ? (
+                <>
+                  <p className="mt-5 flex gap-3 border-l-2 border-cyan pl-4 text-[13px] leading-relaxed text-text">
+                    <IconSpark className="mt-0.5 h-3.5 w-3.5 shrink-0 text-cyan" />
+                    {interviewQ}
+                  </p>
+                  <textarea
+                    value={signals}
+                    onChange={(e) => setSignals(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        if (signals.trim()) void advanceInterview(signals.trim());
+                      }
+                    }}
+                    rows={2}
+                    autoFocus
+                    placeholder="Answer in your own words…"
+                    className="mt-3 w-full resize-none border border-line bg-panel-2/60 px-3.5 py-3 text-[13px] leading-relaxed text-text outline-none transition-colors placeholder:text-text-3 focus:border-cyan/60"
+                  />
+                  <button
+                    onClick={() => signals.trim() && advanceInterview(signals.trim())}
+                    disabled={busy || !signals.trim()}
+                    className="group mt-3 flex w-full items-center justify-center gap-2.5 border border-cyan/50 bg-cyan/10 px-5 py-3 text-[12px] font-medium tracking-[0.12em] text-cyan transition-all hover:bg-cyan/20 hover:shadow-glow disabled:opacity-40"
+                  >
+                    {busy ? "LISTENING…" : "ANSWER"}
+                    {!busy && <IconArrow className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />}
+                  </button>
+                </>
               ) : (
-                <button
-                  onClick={discover}
-                  disabled={busy}
-                  className="group mt-5 flex w-full items-center justify-center gap-2.5 border border-cyan/50 bg-cyan/10 px-5 py-3 text-[12px] font-medium tracking-[0.12em] text-cyan transition-all hover:bg-cyan/20 hover:shadow-glow disabled:opacity-40"
-                >
-                  {busy ? "RANKING…" : "SUGGEST DIRECTIONS"}
-                  {!busy && <IconArrow className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />}
-                </button>
+                <>
+                  <p className="mt-3 text-[13px] leading-relaxed text-text-2">
+                    A few quick questions about what you enjoy, and I&apos;ll rank
+                    career directions by fit — with the evidence for each.
+                  </p>
+                  <button
+                    onClick={() => advanceInterview()}
+                    disabled={busy}
+                    className="group mt-5 flex w-full items-center justify-center gap-2.5 border border-cyan/50 bg-cyan/10 px-5 py-3 text-[12px] font-medium tracking-[0.12em] text-cyan transition-all hover:bg-cyan/20 hover:shadow-glow disabled:opacity-40"
+                  >
+                    {busy ? "THINKING…" : "START THE INTERVIEW"}
+                    {!busy && <IconArrow className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />}
+                  </button>
+                </>
               )}
 
               <button
-                onClick={() => { setStage("describe"); setCareers(null); setError(null); }}
+                onClick={() => {
+                  setStage("describe");
+                  setCareers(null);
+                  setTurns([]);
+                  setInterviewQ(null);
+                  setError(null);
+                }}
                 className="label-meta mt-4 block w-full py-1 text-center transition-colors hover:text-cyan"
               >
-                Back — I&apos;ll describe it myself
+                I already know — I&apos;ll describe it myself
               </button>
             </>
           )}
@@ -398,12 +489,21 @@ export function Onboarding() {
           )}
         </div>
 
-        <button
-          onClick={() => router.replace("/dashboard?demo=1")}
-          className="label-meta mt-5 block w-full py-2 text-center transition-colors hover:text-cyan"
-        >
-          Skip — show me a demo universe first
-        </button>
+        {currentGoal ? (
+          <button
+            onClick={() => router.replace("/dashboard")}
+            className="label-meta mt-5 block w-full py-2 text-center transition-colors hover:text-cyan"
+          >
+            Cancel — back to my universe
+          </button>
+        ) : (
+          <button
+            onClick={() => router.replace("/dashboard?demo=1")}
+            className="label-meta mt-5 block w-full py-2 text-center transition-colors hover:text-cyan"
+          >
+            Skip — show me a demo universe first
+          </button>
+        )}
       </div>
     </main>
   );

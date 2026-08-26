@@ -43,16 +43,23 @@ services:
     env_file:
       - path: ./backend/.env
         required: false
+    # List form on purpose. `environment` OVERRIDES `env_file`, so writing
+    # `OPENAI_API_KEY: ${OPENAI_API_KEY:-}` here clobbered the key set in
+    # backend/.env with an empty string whenever the shell had none — the key
+    # was present on disk and absent in the container. A bare name passes the
+    # variable through only when the shell actually has it, leaving the .env
+    # value intact otherwise.
     environment:
       # Container networking overrides whatever the .env says for hosts.
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: 5432
-      REDIS_URL: redis://redis:6379/0
-      # Redis now backs the shared query-embedding cache.
-      EMBEDDING_CACHE_BACKEND: redis
-      # Passed through from your shell, never baked into the image or a tracked
-      # file. Unset is fine: both providers fall back to their mock.
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - REDIS_URL=redis://redis:6379/0
+      # Redis backs the shared query-embedding cache.
+      - EMBEDDING_CACHE_BACKEND=redis
+      # NOTE: OPENAI_API_KEY is deliberately NOT listed here. Anything named in
+      # `environment` overrides `env_file` — even a bare name with no value,
+      # which resolves to null and wipes the key. backend/.env (gitignored) is
+      # the single place the key lives.
     ports:
       - "${API_PORT:-8000}:8000"
     depends_on:

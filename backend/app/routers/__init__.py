@@ -4,6 +4,7 @@ from fastapi import APIRouter
 
 from app.core.config import settings
 from app.routers import (
+    readiness,
     discovery,
     adaptive,
     assessments,
@@ -53,5 +54,6 @@ api_router.include_router(learning_path.router)
 api_router.include_router(adaptive.router)
 api_router.include_router(chat.router)
 api_router.include_router(discovery.router)
+api_router.include_router(readiness.router)
 
 __all__ = ["api_router", "health_router"]

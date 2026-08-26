@@ -185,3 +185,27 @@ class RoleGraphSpec(BaseModel):
 
 def role_graph_json_schema() -> dict:
     return RoleGraphSpec.model_json_schema()
+
+
+# --- conversational discovery ------------------------------------------------
+class InterviewTurn(BaseModel):
+    """The model's reading of a discovery conversation so far.
+
+    `traits` is its cumulative estimate of the learner's preference vector over
+    the platform's fixed trait taxonomy; unknown traits are simply omitted.
+    The model asks the next question or declares the interview done — the
+    ranking of careers from the vector is deterministic arithmetic elsewhere.
+    """
+
+    traits: dict[str, float] = Field(default_factory=dict)
+    next_question: str | None = Field(default=None, max_length=300)
+    ready: bool = False
+
+    @model_validator(mode="after")
+    def _clamp(self) -> "InterviewTurn":
+        self.traits = {k: min(1.0, max(0.0, v)) for k, v in self.traits.items()}
+        return self
+
+
+def interview_turn_json_schema() -> dict:
+    return InterviewTurn.model_json_schema()

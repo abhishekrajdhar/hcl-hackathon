@@ -4,6 +4,7 @@ import { Stat } from "@/components/ui/Stat";
 import { Badge } from "@/components/ui/Badge";
 import { IconTarget, IconClock, IconChart, IconClipboard } from "@/components/ui/icons";
 import type { DashboardData } from "@/lib/dashboard-data";
+import { Readiness } from "@/components/dashboard/Readiness";
 import { pct, titleCase } from "@/lib/format";
 
 export function Overview({ data }: { data: DashboardData }) {
@@ -59,6 +60,7 @@ export function Overview({ data }: { data: DashboardData }) {
           />
         </div>
       </div>
+      <Readiness isDemo={data.isDemo} />
     </Card>
   );
 }

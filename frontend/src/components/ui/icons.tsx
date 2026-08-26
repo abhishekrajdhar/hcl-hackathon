@@ -40,3 +40,5 @@ export const IconMicOff = base(<><path d="M9 9V6a3 3 0 0 1 5.1-2.1M15 11.5V6M5 1
 export const IconSpeaker = base(<><path d="M4 9v6h4l5 4V5L8 9H4z" /><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8 8 0 0 1 0 12" /></>);
 export const IconSpeakerOff = base(<><path d="M4 9v6h4l5 4V5L8 9H4z" /><path d="M17 9l4 6M21 9l-4 6" /></>);
 export const IconStop = base(<><rect x="6" y="6" width="12" height="12" rx="2" /></>);
+export const IconCompass = base(<><circle cx="12" cy="12" r="9" /><path d="M15.5 8.5l-2 5-5 2 2-5 5-2z" /></>);
+export const IconPin = base(<><path d="M12 21s6-5.3 6-10a6 6 0 1 0-12 0c0 4.7 6 10 6 10z" /><circle cx="12" cy="11" r="2.2" /></>);

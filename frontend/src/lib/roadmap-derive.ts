@@ -70,18 +70,28 @@ export function buildRoadmapView(
       recByTitle.get(item.title.toLowerCase()) ||
       null;
     const res = rec?.resource;
+    // The item carries its own catalogue fields; the recommendation is only a
+    // second opinion. Reading the item first matters because recommendations
+    // are fetched for a handful of target skills, so most of the plan is
+    // absent from them — resolving the URL through `rec` alone left the
+    // majority of courses with no link to open.
     return {
       id: item.id,
       resourceId: item.resource_id ?? undefined,
       title: item.title,
       kind: item.kind,
-      type: res?.resource_type ?? item.kind,
-      provider: res?.provider ?? "",
-      description: res?.description ?? "",
-      url: res?.url ?? "",
+      type: item.resource_type ?? res?.resource_type ?? item.kind,
+      provider: item.provider ?? res?.provider ?? "",
+      description: item.description ?? res?.description ?? "",
+      url: item.url ?? res?.url ?? "",
       estimatedMinutes: item.estimated_minutes,
-      difficulty: res?.difficulty ?? 0,
-      skills: res?.skills.map((s) => s.skill?.name ?? "").filter(Boolean) ?? [],
+      difficulty: item.difficulty ?? res?.difficulty ?? 0,
+      skills:
+        item.skills?.length
+          ? item.skills
+          : res?.skills.map((s) => s.skill?.name ?? "").filter(Boolean) ?? [],
+      // Only the recommender knows which prerequisites this learner has *not*
+      // met; the item lists them all. Prefer the personalised set.
       prerequisites: rec?.unmet_prerequisites.map((p) => p.name) ?? [],
       why: rec?.reason ?? "",
       status: toRoadmapState(item.status),
@@ -120,9 +130,13 @@ export function buildRoadmapView(
           ? {
               id: m.project.id,
               title: m.project.title,
-              description: "",
+              description: m.project.description ?? "",
               estimatedMinutes: m.project.estimated_minutes,
-              skills: m.skill_slug ? [titleCase(m.skill_slug)] : [],
+              skills: m.project.skills?.length
+                ? m.project.skills
+                : m.skill_slug
+                  ? [titleCase(m.skill_slug)]
+                  : [],
               status: toRoadmapState(m.project.status),
             }
           : null,

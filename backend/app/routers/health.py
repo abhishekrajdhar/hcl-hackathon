@@ -49,6 +49,10 @@ async def health(session: SessionDep, response: Response) -> HealthResponse:
         environment=settings.ENVIRONMENT,
         uptime_seconds=round(time.monotonic() - _STARTED_AT, 3),
         components={"database": database},
+        providers={
+            "llm": settings.LLM_PROVIDER,
+            "embeddings": settings.EMBEDDING_PROVIDER,
+        },
     )
 
 

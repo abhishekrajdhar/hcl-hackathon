@@ -53,6 +53,8 @@ CATEGORIES: tuple[CategorySeed, ...] = (
     CategorySeed("computer-vision", "Computer Vision", "Image and video understanding", 8),
     CategorySeed("generative-ai", "Generative AI", "LLMs, diffusion and generative systems", 9),
     CategorySeed("mlops", "MLOps", "Deploying, serving and operating ML systems", 10),
+    CategorySeed("design", "Design", "Interface, interaction and visual design", 11),
+    CategorySeed("game-development", "Game Development", "Engines, graphics and game design", 12),
 )
 
 
@@ -71,6 +73,15 @@ SKILLS: tuple[SkillSeed, ...] = (
               "Branching, merging and collaborative workflows with Git.", ("git",)),
     SkillSeed("shell-scripting", "Shell & CLI", "programming", 2,
               "Unix shell, scripting and command-line tooling.", ("bash", "linux cli")),
+    SkillSeed("operating-systems", "Operating Systems", "programming", 3,
+              "Processes, threads, scheduling, memory and file systems.",
+              ("os", "operating system")),
+    SkillSeed("computer-networks", "Computer Networks", "programming", 3,
+              "Layered networking, TCP/IP, routing and the OSI model.",
+              ("networking", "computer networking")),
+    SkillSeed("testing-and-debugging", "Testing & Debugging", "programming", 2,
+              "Unit tests, fixtures and systematic debugging.",
+              ("unit testing", "software testing", "pytest")),
 
     # --- mathematics ---
     SkillSeed("linear-algebra", "Linear Algebra", "mathematics", 3,
@@ -175,6 +186,22 @@ SKILLS: tuple[SkillSeed, ...] = (
               "Automated testing and delivery pipelines for ML systems.", ("cicd",)),
     SkillSeed("mlops-fundamentals", "MLOps Fundamentals", "mlops", 4,
               "Reproducibility, experiment tracking and the ML lifecycle.", ("mlops",)),
+
+    # --- design ---
+    SkillSeed("user-interface-design", "User Interface Design", "design", 2,
+              "Layout, hierarchy, typography and wireframing interfaces.",
+              ("ui design", "ui/ux", "ux design")),
+
+    # --- game development ---
+    SkillSeed("graphics-programming", "Graphics Programming", "game-development", 4,
+              "Rendering pipelines, shaders and real-time graphics APIs.",
+              ("opengl", "rendering", "3d graphics")),
+    SkillSeed("game-development-frameworks", "Game Engines & Frameworks", "game-development", 2,
+              "Building games with an engine: scenes, components and physics.",
+              ("unity", "godot", "game engine")),
+    SkillSeed("game-design-principles", "Game Design Principles", "game-development", 2,
+              "Mechanics, pacing, difficulty curves and level design.",
+              ("game design", "level design")),
 )
 
 
@@ -270,6 +297,22 @@ EDGES: tuple[EdgeSeed, ...] = (
     EdgeSeed("mlops-fundamentals", "machine-learning"),
     EdgeSeed("mlops-fundamentals", "version-control-git"),
     EdgeSeed("docker-containers", "shell-scripting", "soft_prerequisite", 0.6),
+
+    # systems spine — the backbone of every non-ML engineering role
+    EdgeSeed("operating-systems", "programming-fundamentals"),
+    EdgeSeed("computer-networks", "programming-fundamentals"),
+    EdgeSeed("shell-scripting", "operating-systems", "soft_prerequisite", 0.4),
+    EdgeSeed("testing-and-debugging", "programming-fundamentals"),
+
+    # game development
+    EdgeSeed("graphics-programming", "programming-fundamentals"),
+    EdgeSeed("graphics-programming", "linear-algebra", "soft_prerequisite", 0.5),
+    EdgeSeed("game-development-frameworks", "programming-fundamentals"),
+    # No edge between game design and engines. The route designer had already
+    # drawn `frameworks <- design-principles` at runtime, and asserting the
+    # reverse here made a cycle the graph correctly refused. Design theory and
+    # engine mechanics are complementary rather than sequential, so the seed
+    # states neither direction and leaves the runtime edge standing.
     EdgeSeed("model-deployment", "mlops-fundamentals"),
     EdgeSeed("model-deployment", "docker-containers"),
     EdgeSeed("ml-monitoring", "model-deployment"),

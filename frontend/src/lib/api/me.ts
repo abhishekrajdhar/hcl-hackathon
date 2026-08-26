@@ -97,3 +97,53 @@ export function rateResource(resourceId: UUID, signal: FeedbackSignal, comment?:
     comment,
   } as FeedbackCreate);
 }
+
+// --- readiness & evidence ----------------------------------------------------
+
+export interface ReadinessDimension {
+  key: string;
+  label: string;
+  score: number | null;
+  detail: string;
+}
+
+export interface ReadinessSkill {
+  skill_id: string;
+  name: string;
+  required_level: number;
+  current_level: number;
+  readiness: number;
+}
+
+export interface ReadinessReport {
+  overall: number;
+  weakest: string | null;
+  dimensions: ReadinessDimension[];
+  skills: ReadinessSkill[];
+}
+
+/** Career readiness, derived on demand from the learner's evidence. */
+export function getReadiness(): Promise<ReadinessReport> {
+  return request<ReadinessReport>("/readiness");
+}
+
+export interface EvidenceItem {
+  kind: string;
+  label: string;
+  detail: string;
+  occurred_at: string | null;
+}
+
+export interface SkillEvidence {
+  skill_id: UUID;
+  skill_name: string;
+  skill_slug: string;
+  proficiency: number;
+  confidence: number;
+  evidence: EvidenceItem[];
+}
+
+/** The receipts behind one skill-twin entry. 404 when the skill is unrecorded. */
+export function getSkillEvidence(skillId: UUID): Promise<SkillEvidence> {
+  return request<SkillEvidence>(`/me/skills/${skillId}/evidence`);
+}

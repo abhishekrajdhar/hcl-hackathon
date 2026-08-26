@@ -7,6 +7,8 @@ from fastapi import APIRouter, status
 from app.core.deps import CurrentUser, PaginationDep, SessionDep
 from app.schemas.common import Page
 from app.schemas.skill import UserSkillCreate, UserSkillRead, UserSkillUpdate
+from app.schemas.evidence import SkillEvidenceRead
+from app.services.evidence_service import EvidenceService
 from app.services.user_skill_service import UserSkillService
 
 router = APIRouter(prefix="/me/skills", tags=["learner-skills"])
@@ -67,3 +69,13 @@ async def delete_my_skill(
     skill_id: uuid.UUID, session: SessionDep, current_user: CurrentUser
 ) -> None:
     await UserSkillService(session).delete(current_user.id, skill_id)
+
+
+@router.get("/{skill_id}/evidence", response_model=SkillEvidenceRead)
+async def my_skill_evidence(
+    skill_id: uuid.UUID, session: SessionDep, current_user: CurrentUser
+) -> SkillEvidenceRead:
+    """Everything the system actually knows behind this proficiency number:
+    the recorded entry, assessment attempts on the skill, and completed
+    material that taught it."""
+    return await EvidenceService(session).for_skill(current_user.id, skill_id)

@@ -24,20 +24,31 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.logging import get_logger
+from app.engines.discovery import (
+    ROLES,
+    SCRIPTED_INTERVIEW,
+    TRAITS,
+    infer_traits,
+    score_by_traits,
+)
 from app.engines.discovery import suggest_careers as static_suggest
 from app.llm.base import LLMError, LLMProvider
 from app.llm.parsing import JsonExtractionError, extract_json_object
 from app.llm.prompts import (
     DISCOVERY_SYSTEM_PROMPT,
     GOAL_READING_SYSTEM_PROMPT,
+    INTERVIEW_SYSTEM_PROMPT,
     build_discovery_user_prompt,
     build_goal_reading_user_prompt,
+    build_interview_user_prompt,
 )
 from app.llm.schemas import (
     CareerAdvice,
     GoalReading,
+    InterviewTurn,
     career_advice_json_schema,
     goal_reading_json_schema,
+    interview_turn_json_schema,
 )
 from app.repositories.skill import SkillCategoryRepository, SkillRepository
 from app.schemas.discovery import CareerSuggestionRead, CareerTargetSkill
@@ -201,6 +212,102 @@ class CareerDiscoveryService(BaseService):
             )
             for s in static_suggest(interests, known, free_text=free_text, top_k=top_k)
         ]
+
+    # --- conversational discovery ------------------------------------------
+    #: The interview never runs longer than this many questions.
+    MAX_INTERVIEW_TURNS = 4
+
+    async def interview(
+        self, turns: list[tuple[str, str]]
+    ) -> tuple[str | None, dict[str, float], list[CareerSuggestionRead]]:
+        """One step of the discovery interview.
+
+        Returns (next_question, trait_vector, careers). `next_question` is None
+        when the interview is done, at which point `careers` carries the
+        ranking. The split of labour is deliberate: the model reads the human
+        (question-asking and trait estimation are judgement), while the ranking
+        of careers from the vector is pure arithmetic — the same vector always
+        yields the same careers, whoever produced it.
+        """
+        vector: dict[str, float] = {}
+        question: str | None = None
+        # The turn limit ends the interview whatever the model thinks, so a
+        # conversation can never run forever.
+        done = len(turns) >= self.MAX_INTERVIEW_TURNS
+
+        if self._agentic_enabled():
+            reading = await self._read_interview(turns)
+            if reading is not None:
+                vector = {t: v for t, v in reading.traits.items() if t in TRAITS}
+                question = reading.next_question
+                # Readiness requires something to rank on. A model that
+                # declares itself ready while returning no traits — which it
+                # will do on an empty transcript, where there is genuinely
+                # nothing to read — has told us nothing, and honouring it ended
+                # the interview on turn zero with an empty list of careers.
+                done = done or (bool(vector) and (reading.ready or not question))
+        if not vector:
+            # Scripted fallback: fixed questions, keyword-inferred vector.
+            vector = infer_traits([a for _, a in turns])
+            index = len(turns)
+            question = (
+                SCRIPTED_INTERVIEW[index]["question"]
+                if index < len(SCRIPTED_INTERVIEW)
+                else None
+            )
+            # Only the exhaustion of the script can finish this branch; the
+            # turn limit above still applies.
+            done = done or question is None
+
+        if not done:
+            return question, vector, []
+
+        by_slug = {r.slug: r for r in ROLES}
+        careers = [
+            CareerSuggestionRead(
+                slug=m.role_slug,
+                title=by_slug[m.role_slug].title,
+                pitch=by_slug[m.role_slug].pitch,
+                score=round(m.fit * 100, 1),
+                reasons=(
+                    [f"strong fit on {', '.join(d.replace('_', ' ') for d in m.drivers)}"]
+                    if m.drivers
+                    else []
+                ),
+                target_skills=[
+                    CareerTargetSkill(skill_slug=slug, required_level=lvl)
+                    for slug, lvl in by_slug[m.role_slug].target_skills
+                ],
+            )
+            for m in score_by_traits(vector, top_k=3)
+            if m.role_slug in by_slug
+        ]
+        if not careers:
+            # Finishing with nothing to offer is a dead end for the learner.
+            # Keep asking while the script has questions left; only past that
+            # do we admit we could not read a direction.
+            index = len(turns)
+            if index < len(SCRIPTED_INTERVIEW):
+                return SCRIPTED_INTERVIEW[index]["question"], vector, []
+            logger.warning(
+                "discovery interview produced no careers",
+                extra={"turns": len(turns), "traits": len(vector)},
+            )
+        return None, vector, careers
+
+    async def _read_interview(self, turns: list[tuple[str, str]]) -> InterviewTurn | None:
+        assert self.provider is not None
+        try:
+            completion = await self.provider.complete(
+                system=INTERVIEW_SYSTEM_PROMPT.format(traits=", ".join(TRAITS)),
+                user=build_interview_user_prompt(turns),
+                json_schema=interview_turn_json_schema(),
+                max_tokens=300,
+            )
+            return InterviewTurn.model_validate(extract_json_object(completion.text))
+        except (LLMError, JsonExtractionError, PydanticValidationError) as exc:
+            logger.warning("interview reading failed; scripted fallback", extra={"error": str(exc)[:200]})
+            return None
 
     # --- goal intelligence -------------------------------------------------
     async def read_goal(self, message: str) -> GoalReading | None:
