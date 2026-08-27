@@ -35,19 +35,40 @@ def _pin_mock_providers() -> Generator[None, None, None]:
     API calls, and its results would depend on their configuration. Tests that
     need a model inject a seeded MockProvider explicitly.
     """
-    original = (settings.LLM_PROVIDER, settings.EMBEDDING_PROVIDER, settings.OPENAI_API_KEY)
+    original = (
+        settings.LLM_PROVIDER,
+        settings.EMBEDDING_PROVIDER,
+        settings.OPENAI_API_KEY,
+        settings.CATALOGUE_PROVIDER,
+        settings.YOUTUBE_API_KEY,
+    )
     settings.LLM_PROVIDER = "mock"
     settings.EMBEDDING_PROVIDER = "mock"
-    # Also hide the key: a provider constructed directly in a test would
-    # otherwise fall back to it and reach the real API.
+    # Catalogue ingestion reaches the public internet — YouTube search pages and
+    # the Data API. A developer running with CATALOGUE_PROVIDER=scrape would
+    # otherwise have the suite scrape YouTube, which is slow, rate-limited and
+    # nobody's idea of a unit test. Tests inject a fake provider explicitly.
+    settings.CATALOGUE_PROVIDER = "none"
+    # Also hide the keys: a provider constructed directly in a test would
+    # otherwise fall back to them and reach the real API.
     settings.OPENAI_API_KEY = None
-    # The provider is memoised per process; drop the cached instance.
+    settings.YOUTUBE_API_KEY = None
+    # The providers are memoised per process; drop the cached instances.
+    from app.catalogue.factory import get_catalogue_provider
     from app.embeddings.factory import get_embedding_provider
     from app.llm.factory import get_llm_provider
 
     get_embedding_provider.cache_clear()
     get_llm_provider.cache_clear()
+    get_catalogue_provider.cache_clear()
     yield
-    settings.LLM_PROVIDER, settings.EMBEDDING_PROVIDER, settings.OPENAI_API_KEY = original
+    (
+        settings.LLM_PROVIDER,
+        settings.EMBEDDING_PROVIDER,
+        settings.OPENAI_API_KEY,
+        settings.CATALOGUE_PROVIDER,
+        settings.YOUTUBE_API_KEY,
+    ) = original
     get_embedding_provider.cache_clear()
     get_llm_provider.cache_clear()
+    get_catalogue_provider.cache_clear()

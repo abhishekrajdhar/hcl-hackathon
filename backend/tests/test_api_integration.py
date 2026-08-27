@@ -23,6 +23,13 @@ from app.repositories.user import UserRepository
 
 pytestmark = pytest.mark.asyncio
 
+#: One token per run, stamped into every slug this module creates so the
+#: cleanup below can find its own rows and only its own. These tests write to
+#: the real development database through the API; without cleanup each run left
+#: permanent junk behind, and after enough runs that junk started outranking the
+#: real catalogue in semantic-search assertions.
+RUN = uuid.uuid4().hex[:8]
+
 ADMIN_PASSWORD = "integration-admin-pw"
 LEARNER_PASSWORD = "integration-learner-pw"
 
@@ -40,6 +47,60 @@ async def _database_available() -> bool:
 async def _require_database() -> None:
     if not await _database_available():
         pytest.skip("database not reachable or not migrated", allow_module_level=True)
+
+
+@pytest_asyncio.fixture(scope="module", autouse=True)
+async def _clean_up_created_rows():
+    """Delete everything this module created.
+
+    Keyed on this run's token so a parallel run cannot delete another's rows.
+    Resources go first: skills cannot be removed while a resource still links
+    to them.
+    """
+    yield
+    async with SessionLocal() as session:
+        # Path items reference resources with ON DELETE SET NULL, and an item
+        # that targets neither a resource nor an assessment violates its check
+        # constraint — so the items (and the now-empty paths) go first.
+        resource_ids = (await session.execute(
+            text("select id from resources where provider = :p"), {"p": f"test-{RUN}"}
+        )).scalars().all()
+        if resource_ids:
+            path_ids = (await session.execute(
+                text("select distinct path_id from learning_path_items"
+                     " where resource_id = any(:ids)"),
+                {"ids": list(resource_ids)},
+            )).scalars().all()
+            await session.execute(
+                text("delete from learning_path_items where resource_id = any(:ids)"),
+                {"ids": list(resource_ids)},
+            )
+            if path_ids:
+                await session.execute(
+                    text("delete from learning_paths where id = any(:ids)"
+                         " and not exists (select 1 from learning_path_items i"
+                         "                 where i.path_id = learning_paths.id)"),
+                    {"ids": list(path_ids)},
+                )
+        await session.execute(
+            text("delete from resources where provider = :p"), {"p": f"test-{RUN}"}
+        )
+        ids = (await session.execute(
+            text("select id from skills where slug like :p"), {"p": f"%-{RUN}"}
+        )).scalars().all()
+        if ids:
+            await session.execute(
+                text("delete from prerequisites where source_skill_id = any(:ids)"
+                     " or prerequisite_skill_id = any(:ids)"),
+                {"ids": list(ids)},
+            )
+            await session.execute(
+                text("delete from skills where id = any(:ids)"), {"ids": list(ids)}
+            )
+        await session.execute(
+            text("delete from skill_categories where slug like :p"), {"p": f"%-{RUN}"}
+        )
+        await session.commit()
 
 
 @pytest_asyncio.fixture
@@ -78,7 +139,7 @@ async def learner(api: AsyncClient) -> dict[str, str]:
 
 
 async def _make_category(api: AsyncClient, admin: dict[str, str]) -> str:
-    slug = f"cat-{uuid.uuid4().hex[:8]}"
+    slug = f"cat-{uuid.uuid4().hex[:6]}-{RUN}"
     response = await api.post(
         "/skill-categories", headers=admin, json={"slug": slug, "name": slug}
     )
@@ -87,7 +148,7 @@ async def _make_category(api: AsyncClient, admin: dict[str, str]) -> str:
 
 
 async def _make_skill(api: AsyncClient, admin: dict[str, str], name: str) -> str:
-    slug = f"{name}-{uuid.uuid4().hex[:8]}"
+    slug = f"{name}-{uuid.uuid4().hex[:6]}-{RUN}"
     category_id = await _make_category(api, admin)
     response = await api.post(
         "/skills",
@@ -120,7 +181,7 @@ async def test_register_and_login(api: AsyncClient) -> None:
 
 async def test_catalogue_writes_require_admin(api: AsyncClient, learner: dict[str, str]) -> None:
     response = await api.post(
-        "/skills", headers=learner, json={"slug": f"x-{uuid.uuid4().hex[:8]}", "name": "X"}
+        "/skills", headers=learner, json={"slug": f"x-{uuid.uuid4().hex[:6]}-{RUN}", "name": "X"}
     )
     assert response.status_code == 403
 
@@ -237,7 +298,7 @@ async def test_path_progress_and_ownership(
         "/resources",
         headers=admin,
         json={
-            "provider": "test",
+            "provider": f"test-{RUN}",
             "title": "A course",
             "url": "https://example.test/course",
             "estimated_hours": 1.0,

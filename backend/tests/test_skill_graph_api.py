@@ -25,6 +25,31 @@ from app.repositories.user import UserRepository
 
 pytestmark = pytest.mark.asyncio
 
+#: Run token for the temporary skills these tests create, so cleanup finds its
+#: own rows and only its own. Left behind, they show up forever as skills the
+#: catalogue cannot teach — and the ingestion pipeline would then spend real
+#: search quota trying to find courses for "temp-advanced".
+RUN = uuid.uuid4().hex[:8]
+
+
+@pytest_asyncio.fixture(scope="module", autouse=True)
+async def _clean_up_temp_skills():
+    yield
+    async with SessionLocal() as session:
+        ids = (await session.execute(
+            text("select id from skills where slug like :p"), {"p": f"%-{RUN}"}
+        )).scalars().all()
+        if ids:
+            await session.execute(
+                text("delete from prerequisites where source_skill_id = any(:ids)"
+                     " or prerequisite_skill_id = any(:ids)"),
+                {"ids": list(ids)},
+            )
+            await session.execute(
+                text("delete from skills where id = any(:ids)"), {"ids": list(ids)}
+            )
+            await session.commit()
+
 ADMIN_PASSWORD = "graph-admin-pw"
 LEARNER_PASSWORD = "graph-learner-pw"
 
@@ -328,7 +353,7 @@ async def test_add_and_remove_valid_prerequisite(
     # Create two throwaway skills in an existing category and link them.
     cats = await api.get("/skill-categories", headers=admin)
     category_id = cats.json()[0]["id"]
-    suffix = uuid.uuid4().hex[:8]
+    suffix = RUN
 
     async def make(name: str, difficulty: int) -> str:
         resp = await api.post(

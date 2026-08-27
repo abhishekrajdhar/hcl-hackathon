@@ -492,16 +492,18 @@ ever opened.
 ## Seed data
 
 `python -m app.db.seed` is idempotent and safe on every deploy. It writes the
-bootstrap admin, a working knowledge graph — **10 categories, 49 skills,
-76 prerequisite edges** — and the resource catalogue.
+bootstrap admin, a working knowledge graph — **12 categories, 56 skills,
+83 prerequisite edges** — and the resource catalogue.
 
-The catalogue is **real content**: 57 YouTube courses and lectures whose title,
+The catalogue is **real content**: 89 YouTube courses and lectures whose title,
 channel and runtime were read from YouTube's own oEmbed endpoint and watch
 page, not written by hand. A candidate that failed verification was dropped
 rather than seeded with guessed metadata, so every URL resolves and every
-`estimated_hours` is an actual runtime (261 hours in total, from freeCodeCamp,
-3Blue1Brown, StatQuest, Andrej Karpathy, Corey Schafer and others). Refresh it
-when videos change:
+`estimated_hours` is an actual runtime (247 hours in total, from freeCodeCamp,
+3Blue1Brown, StatQuest, Andrej Karpathy, Neso Academy and others). **Every
+skill in the graph has at least one resource that teaches it** — a skill
+nothing covers becomes a "Self-study: X" milestone with nothing for the learner
+to actually do. Refresh it when videos change:
 
 ```bash
 python scripts/refresh_catalogue.py   # re-reads YouTube
@@ -514,12 +516,69 @@ twice, so the catalogue and the DAG cannot disagree about what gates what.
 Introductory material (difficulty 1–2) is never gated — gating a beginner
 course behind prerequisites is how a learner gets stuck.
 
-Alongside the videos sit 8 project briefs and 3 checkpoints, which are
-completed inside the app rather than on an external site.
+Alongside the videos sit 14 project briefs and 5 checkpoints, which are
+completed inside the app rather than on an external site. They live in
+`scripts/inapp_items.json` — hand-authored source, in the repo rather than in
+a temp file, so regenerating the seed cannot lose them.
 
 Seeding **reconciles** existing rows rather than skipping them: a title,
 runtime or prerequisite that changes in the seed lands on the next run, and the
-row keeps its id so learning paths pointing at it stay valid.
+row keeps its id so learning paths pointing at it stay valid. The same applies
+to skills: one the route designer invented at runtime — placeholder
+description, catch-all category — is promoted to its curated definition once
+the seed gains one, because curated data beats a model's guess.
+
+## Catalogue pipeline
+
+Seeding covers what is curated. The pipeline covers what is not: the route
+designer **creates skills at runtime** whenever a learner's goal needs one the
+catalogue lacks, and nothing teaches those until someone notices. It also
+answers a question nothing else in the system can — *is that video still
+there?* A video that goes private becomes a dead link on somebody's roadmap and
+no other code path would ever find out.
+
+```bash
+# nightly — deactivate resources whose video is gone or now private
+python -m scripts.catalogue_pipeline health
+
+# weekly — find real content for skills nothing teaches
+python -m scripts.catalogue_pipeline gaps --dry-run    # plan + quota cost
+python -m scripts.catalogue_pipeline gaps --yes        # actually spend it
+python -m scripts.catalogue_pipeline gaps --skill operating-systems --yes
+```
+
+Provider is settings-driven like every other seam here. `CATALOGUE_PROVIDER`
+defaults to **`none`** — ingestion reaches the public internet, so it stays off
+until switched on — and `youtube` degrades back to `none` when
+`YOUTUBE_API_KEY` is missing rather than silently scraping.
+
+| provider | key | search cost | can prove a video is gone |
+| --- | --- | --- | --- |
+| `none` | — | — | no (finds nothing, says so) |
+| `scrape` | — | free, rate-limited | **no** |
+| `youtube` | `YOUTUBE_API_KEY` | 100 units/search | **yes** |
+
+That last column is load-bearing. `search.list` costs 100 units against a
+10,000/day default (~95 searches), while `videos.list` batches 50 ids per unit
+— so re-checking the whole catalogue is 2 units and discovery is the expensive
+half. Discovery therefore runs **per skill, not per request**: a search result
+is worth keeping forever, and paying for one inside a learner's roadmap
+generation would exhaust the daily quota after ten learners.
+
+Only a provider that **can prove absence** may deactivate anything. An
+authenticated API reports `status.privacyStatus`; a scraper cannot tell a
+throttled response from a deleted video. Ignoring that distinction once
+deactivated 89 working videos in a single run, so `can_prove_absence` defaults
+to false and a new provider has to earn it. Recovery is unrestricted in the
+other direction — a successful fetch is positive evidence whoever obtained it.
+
+Selection itself is a **pure engine** (`app/engines/catalogue/select.py`): no
+DB, no clock, no network, so the same candidates always yield the same picks.
+It rejects what raw search actually returns — career-advice videos that teach
+nothing ("Roadmap to Become an X"), teasers under nine minutes, runtimes that
+would swallow a learner's whole month, titles that do not match the skill on a
+**whole-word** basis, and more than one pick per channel so "Part 1" and
+"Part 2" never become a learner's two options.
 
 ## Entities
 

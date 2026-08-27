@@ -30,3 +30,9 @@ bcrypt==4.2.1
 # them when using the default mock provider.
 anthropic==0.44.0
 openai==1.59.6
+
+# --- Catalogue ingestion ---------------------------------------------------
+# Used by the catalogue providers (YouTube Data API / scrape fallback). Already
+# an indirect dependency of fastapi and openai; pinned here because app code now
+# imports it directly.
+httpx==0.28.1

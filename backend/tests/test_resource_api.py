@@ -20,6 +20,21 @@ from app.repositories.user import UserRepository
 
 pytestmark = pytest.mark.asyncio
 
+#: Run token for the rows this module creates, so cleanup finds its own and
+#: only its own. Left uncleaned, these accumulate in the development database
+#: one copy per run and eventually distort catalogue-wide assertions elsewhere.
+RUN = uuid.uuid4().hex[:8]
+
+
+@pytest_asyncio.fixture(scope="module", autouse=True)
+async def _clean_up_created_resources():
+    yield
+    async with SessionLocal() as session:
+        await session.execute(
+            text("delete from resources where provider = :p"), {"p": f"prereq-test-{RUN}"}
+        )
+        await session.commit()
+
 PW = "resource-pw-12345"
 
 
@@ -225,8 +240,8 @@ async def test_prerequisite_endpoints(api: AsyncClient, admin) -> None:  # type:
     created = await api.post(
         "/resources",
         headers=admin,
-        json={"provider": "x", "title": "prereq test", "url": "https://x.test",
-              "external_id": f"pre-{uuid.uuid4().hex[:8]}"},
+        json={"provider": f"prereq-test-{RUN}", "title": "prereq test",
+              "url": "https://x.test", "external_id": f"pre-{uuid.uuid4().hex[:8]}"},
     )
     rid = created.json()["id"]
 

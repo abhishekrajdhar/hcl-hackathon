@@ -94,6 +94,24 @@ class Settings(BaseSettings):
     OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"
     OPENAI_BASE_URL: str | None = None
 
+    # --- Catalogue ingestion ---------------------------------------------
+    # How new learning resources are discovered and how existing ones are
+    # health-checked. "none" is the default on purpose: ingestion reaches the
+    # public internet, so it stays off until it is deliberately switched on.
+    # "youtube" needs YOUTUBE_API_KEY and degrades to "none" without it;
+    # "scrape" needs no key but is rate-limited and best-effort.
+    CATALOGUE_PROVIDER: Literal["none", "youtube", "scrape"] = "none"
+    YOUTUBE_API_KEY: str | None = None
+    CATALOGUE_TIMEOUT_SECONDS: float = 20.0
+    #: Preferred audio language. Only a *stated* mismatch is rejected, so
+    #: providers that report nothing are unaffected.
+    CATALOGUE_LANGUAGE: str = "en"
+    #: Candidates fetched per skill before selection. More costs nothing extra
+    #: on the API (one search either way) and gives the selector more to reject.
+    CATALOGUE_SEARCH_LIMIT: int = 10
+    #: How many resources to keep per discovered skill.
+    CATALOGUE_PICKS_PER_SKILL: int = 2
+
     # --- Logging ---------------------------------------------------------
     LOG_LEVEL: str = "INFO"
     LOG_FORMAT: Literal["json", "console"] = "json"
