@@ -132,3 +132,26 @@ def test_teaching_band_matches_the_seed_table() -> None:
     assert teaching_band(1) == (0.0, 0.55)
     assert teaching_band(4) == (0.4, 0.85)
     assert teaching_band(99) == (0.0, 0.65), "unknown difficulty falls back, never raises"
+
+
+def test_title_declared_language_is_a_stated_mismatch() -> None:
+    """The scraper reports no language, so a title saying "in Hindi" is the
+    only signal — and it must count. An unlabeled English title still passes."""
+    from app.catalogue.base import VideoRecord
+    from app.engines.catalogue.select import score_candidate
+
+    hindi = VideoRecord(
+        video_id="a" * 11,
+        title="Prometheus Monitoring Full Tutorial in Hindi",
+        channel="c",
+        duration_hours=3.0,
+    )
+    assert score_candidate(hindi, "Monitoring", ("prometheus monitoring",)) is None
+
+    english = VideoRecord(
+        video_id="b" * 11,
+        title="Prometheus Monitoring Full Tutorial",
+        channel="c",
+        duration_hours=3.0,
+    )
+    assert score_candidate(english, "Monitoring", ("prometheus monitoring",)) is not None

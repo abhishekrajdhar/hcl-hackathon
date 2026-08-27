@@ -7,7 +7,9 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-TriggerKind = Literal["assessment", "resource_completed", "resource_skipped", "explicit"]
+TriggerKind = Literal[
+    "assessment", "resource_completed", "item_completed", "resource_skipped", "explicit"
+]
 
 
 class ExplicitSkillScore(BaseModel):
@@ -27,6 +29,9 @@ class AdaptiveUpdateRequest(BaseModel):
     #: Exactly one trigger below.
     assessment_result_id: uuid.UUID | None = None
     completed_resource_id: uuid.UUID | None = None
+    #: A path item completed directly — the trigger for items that carry no
+    #: resource (self-study reviews, projects completed in-app).
+    completed_item_id: uuid.UUID | None = None
     skipped_resource_id: uuid.UUID | None = None
     skill_scores: list[ExplicitSkillScore] = Field(default_factory=list)
     #: Optional context signals.
@@ -38,13 +43,14 @@ class AdaptiveUpdateRequest(BaseModel):
         triggers = [
             self.assessment_result_id is not None,
             self.completed_resource_id is not None,
+            self.completed_item_id is not None,
             self.skipped_resource_id is not None,
             bool(self.skill_scores),
         ]
         if sum(triggers) != 1:
             raise ValueError(
                 "Provide exactly one of: assessment_result_id, completed_resource_id, "
-                "skipped_resource_id, skill_scores"
+                "completed_item_id, skipped_resource_id, skill_scores"
             )
         return self
 

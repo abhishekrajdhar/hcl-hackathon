@@ -32,9 +32,11 @@ from app.repositories.skill import (
     UserSkillRepository,
 )
 from app.repositories.user import LearnerProfileRepository, UserRepository
+from app.repositories.resource import ResourceRepository
 from app.schemas.explanation import (
     ExplanationRequest,
     ExplanationResponse,
+    PathItemExplanationResponse,
     PrerequisiteRelation,
     RecommendationEvidence,
     ResourceSkillFact,
@@ -94,7 +96,112 @@ class ExplanationService(BaseService):
             evidence=evidence,
         )
 
+    async def explain_path_item(
+        self,
+        path_id: uuid.UUID,
+        item_id: uuid.UUID,
+        request: ExplanationRequest,
+        *,
+        requesting_user_id: uuid.UUID,
+        is_admin: bool,
+    ) -> PathItemExplanationResponse:
+        """Why this roadmap item is on the learner's path.
+
+        Same seam as recommendation explanations — persisted rationale and
+        live proficiency in, grounded prose out — but keyed on the path item,
+        so every planned item can answer "why this?", not only the few that
+        happen to also be current recommendations.
+        """
+        item = await self.path_items.get(item_id)
+        if item is None or item.path_id != path_id:
+            raise NotFoundError("Learning path item", item_id)
+        path = await self.paths.get(item.path_id)
+        # Ownership reads as absence, so a non-owner cannot probe which
+        # item ids exist — the same rule the rest of the API follows.
+        if path is None or (not is_admin and path.user_id != requesting_user_id):
+            raise NotFoundError("Learning path item", item_id)
+
+        evidence = await self._build_item_evidence(path.user_id, item)
+        explanation, grounded, source = await self._generate(evidence, request)
+        return PathItemExplanationResponse(
+            item_id=item.id,
+            kind=request.kind,
+            explanation=explanation,
+            grounded=grounded,
+            source=source,
+            evidence=evidence,
+        )
+
     # --- evidence assembly ----------------------------------------------
+    async def _build_item_evidence(self, user_id: uuid.UUID, item) -> RecommendationEvidence:  # type: ignore[no-untyped-def]
+        """Evidence for one path item, from its persisted rationale trace and
+        the learner's current records. Every number here is verifiable."""
+        trace = item.rationale_trace or {}
+
+        resource = None
+        if item.resource_id is not None:
+            resource = await ResourceRepository(self.session).get(item.resource_id)
+
+        skill = None
+        if trace.get("skill_id"):
+            try:
+                skill = await self.skills.get(uuid.UUID(str(trace["skill_id"])))
+            except (ValueError, TypeError):
+                skill = None
+        skill_name = skill.name if skill else (trace.get("milestone") or "the target skill")
+
+        current_level = 0.0
+        if skill is not None:
+            us = await self.user_skills.get_for_user(user_id, skill.id)
+            current_level = us.proficiency if us else 0.0
+
+        goal_title, goal_required = await self._goal_and_required(user_id, skill)
+        required_level = float(trace.get("required_level") or goal_required)
+        skill_gap = max(0.0, round(required_level - current_level, 4))
+
+        prereq_relations = await self._prerequisite_relations(user_id, skill)
+        resource_skills = [
+            ResourceSkillFact(
+                skill=link.skill.name,
+                teaches_from=min(1.0, max(0.0, link.teaches_level_from)),
+                teaches_to=min(1.0, max(0.0, link.teaches_level_to)),
+            )
+            for link in (resource.skills if resource else [])
+            if link.skill is not None
+        ]
+
+        siblings = await self.path_items.list_for_path(item.path_id)
+        unlocks: list[str] = []
+        for sibling in siblings:
+            name = (sibling.rationale_trace or {}).get("milestone")
+            if sibling.milestone_index > item.milestone_index and name and name not in unlocks:
+                unlocks.append(name)
+        position = RoadmapPosition(
+            phase_index=item.milestone_index,
+            phase_title=trace.get("phase_title") or item.milestone_title or "your roadmap",
+            milestone=trace.get("milestone") or item.title,
+            unlocks=unlocks[:4],
+        )
+
+        return RecommendationEvidence(
+            resource_title=resource.title if resource else item.title,
+            resource_type=(
+                resource.resource_type.value if resource else item.item_type.value
+            ),
+            resource_difficulty=(
+                resource.difficulty if resource else int(trace.get("difficulty") or 1)
+            ),
+            learner_skill=skill_name,
+            current_level=round(current_level, 4),
+            required_level=round(required_level, 4),
+            skill_gap=skill_gap,
+            prerequisite_relationships=prereq_relations,
+            resource_skills=resource_skills,
+            goal=goal_title,
+            roadmap_position=position,
+            strengths=await self._strengths(user_id),
+        )
+
     async def _build_evidence(self, rec: Recommendation) -> RecommendationEvidence:
         user_id = rec.user_id
         resource = rec.resource

@@ -17,8 +17,8 @@ export function DemoBanner() {
         <span className="label-meta text-amber">Demo universe</span>
       </span>
       <p className="min-w-0 flex-1 text-[12px] leading-relaxed text-text-2">
-        This is a sample learner&apos;s journey, not yours — the goal, roadmap and
-        progress below all belong to the demo.
+        You&apos;re signed into the shared demo learner — a real account served live
+        by the engine, but its goal, roadmap and progress aren&apos;t yours.
       </p>
       <Link
         href="/onboarding"
@@ -27,6 +27,47 @@ export function DemoBanner() {
         BUILD MY OWN
         <IconArrow className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
       </Link>
+    </div>
+  );
+}
+
+/**
+ * Profile and goal exist, but no roadmap does — onboarding was interrupted or
+ * generation failed at the time. One click asks the real generator to plan the
+ * route now; a goal the catalogue cannot resolve routes back to onboarding.
+ */
+export function GeneratePathBanner({
+  goal,
+  generating,
+  error,
+  onGenerate,
+}: {
+  goal: string;
+  generating: boolean;
+  error: string | null;
+  onGenerate: () => void;
+}) {
+  return (
+    <div className="hud hud-bracket flex flex-wrap items-center gap-x-4 gap-y-2 border-cyan/40 px-5 py-3">
+      <span className="flex items-center gap-2">
+        <IconSpark className="h-3.5 w-3.5 text-cyan" />
+        <span className="label-meta text-cyan">No roadmap yet</span>
+      </span>
+      <p className="min-w-0 flex-1 text-[12px] leading-relaxed text-text-2">
+        {error
+          ? error
+          : `Your goal — ${goal} — is saved, but no route has been planned for it yet.`}
+      </p>
+      <button
+        onClick={onGenerate}
+        disabled={generating}
+        className="group flex shrink-0 items-center gap-2 border border-cyan/50 bg-cyan/10 px-4 py-2 text-[11px] font-medium tracking-[0.1em] text-cyan transition-all hover:bg-cyan/20 disabled:opacity-50"
+      >
+        {generating ? "CHARTING YOUR ROUTE…" : "GENERATE MY ROADMAP"}
+        {!generating && (
+          <IconArrow className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
+        )}
+      </button>
     </div>
   );
 }

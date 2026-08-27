@@ -1,18 +1,47 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { HeroWorld } from "@/components/landing/HeroWorld";
 import { IconArrow } from "@/components/ui/icons";
+import { publicApi } from "@/lib/api";
 
-/** Live telemetry strip — real figures from the seeded catalogue. */
-const TELEMETRY = [
-  { label: "Skills mapped", value: "49" },
-  { label: "Prerequisite edges", value: "76" },
+/** Telemetry strip. Graph figures are fetched live from the backend rather
+ * than written here, so the strip can never disagree with the catalogue; the
+ * two architectural constants below are properties of the code, not the data.
+ * With no backend the counts read "—", which is the truth. */
+const STATIC_TELEMETRY = [
   { label: "Deterministic engines", value: "9" },
   { label: "Model-invented facts", value: "0" },
 ];
 
+function useTelemetry() {
+  const [graphStats, setGraphStats] = useState({ skills: "—", edges: "—" });
+  useEffect(() => {
+    let cancelled = false;
+    publicApi
+      .getDemoUniverse()
+      .then((u) => {
+        if (cancelled || !u.available || !u.graph) return;
+        setGraphStats({
+          skills: String(u.catalogue.length),
+          edges: String(u.graph.edges.length),
+        });
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return [
+    { label: "Skills mapped", value: graphStats.skills },
+    { label: "Prerequisite edges", value: graphStats.edges },
+    ...STATIC_TELEMETRY,
+  ];
+}
+
 export function Hero() {
+  const telemetry = useTelemetry();
   return (
     <section className="relative flex min-h-screen flex-col overflow-hidden">
       <Corners />
@@ -79,7 +108,7 @@ export function Hero() {
       {/* Telemetry along the floor of the viewport. */}
       <div className="relative z-10 mx-auto w-full max-w-[1500px] px-6 pb-8 lg:px-12">
         <div className="grid grid-cols-2 gap-px border-t border-line bg-line md:grid-cols-4">
-          {TELEMETRY.map((t) => (
+          {telemetry.map((t) => (
             <div key={t.label} className="bg-void px-4 py-4">
               <div className="readout display text-[22px] font-semibold text-text">{t.value}</div>
               <div className="label-meta mt-1.5">{t.label}</div>

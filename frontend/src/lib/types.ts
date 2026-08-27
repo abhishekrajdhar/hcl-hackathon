@@ -321,6 +321,9 @@ export interface AdaptiveUpdateRequest {
   user_id: UUID;
   assessment_result_id?: UUID;
   completed_resource_id?: UUID;
+  /** A path item completed directly — for items with no resource behind them
+   * (self-study reviews, in-app projects). */
+  completed_item_id?: UUID;
   skipped_resource_id?: UUID;
   skill_scores?: ExplicitSkillScore[];
   feedback?: string;

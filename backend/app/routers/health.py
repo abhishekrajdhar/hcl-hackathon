@@ -10,6 +10,7 @@ from sqlalchemy import text
 from app.core.config import settings
 from app.core.deps import SessionDep
 from app.core.logging import get_logger
+from app.llm.factory import resolve_provider_name
 from app.schemas.health import ComponentHealth, HealthResponse
 
 logger = get_logger(__name__)
@@ -50,7 +51,10 @@ async def health(session: SessionDep, response: Response) -> HealthResponse:
         uptime_seconds=round(time.monotonic() - _STARTED_AT, 3),
         components={"database": database},
         providers={
-            "llm": settings.LLM_PROVIDER,
+            # The provider that will actually answer, not the raw setting —
+            # `openai` with no key resolves to claude when an Anthropic key
+            # exists, and hiding that here would make the swap invisible.
+            "llm": resolve_provider_name(settings.LLM_PROVIDER),
             "embeddings": settings.EMBEDDING_PROVIDER,
         },
     )

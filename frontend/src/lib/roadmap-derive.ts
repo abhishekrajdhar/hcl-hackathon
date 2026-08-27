@@ -171,6 +171,7 @@ export function buildRoadmapView(
   });
 
   return {
+    pathId: roadmap.path_id,
     goal,
     role,
     progressPct,

@@ -28,8 +28,9 @@ from app.engines.adaptive import (
 )
 from app.engines.assessment import mastery_level
 from app.engines.profile import assessment_skill_scores, proficiency_to_level
-from app.models.enums import EvidenceSource, PathItemStatus, PathItemType
+from app.models.enums import EvidenceSource, PathItemStatus, PathItemType, ProgressEventType
 from app.models.path import LearningPath, LearningPathItem
+from app.models.progress import UserProgress
 from app.models.resource import Resource
 from app.models.skill import Skill, UserSkill
 from app.repositories.assessment import AssessmentResultRepository
@@ -49,6 +50,7 @@ from app.schemas.adaptive import (
     UpdatedSkillRead,
 )
 from app.services.base import BaseService
+from app.services.path_unlock import unlock_if_exhausted
 
 _INTRO_DIFFICULTY = 2  # resources at/below this difficulty count as introductory
 _MAX_REMEDIATION = 2
@@ -94,6 +96,7 @@ class AdaptiveLearningService(BaseService):
         # load the active path once; all path mutations happen on it
         path = await self.paths.get_active_for_user(request.user_id)
         items = await self.path_items.list_for_path(path.id) if path else []
+        status_before = {i.id: i.status for i in items}
 
         completed: list[MilestoneRead] = []
         unlocked: list[MilestoneRead] = []
@@ -103,6 +106,8 @@ class AdaptiveLearningService(BaseService):
         # 2) mark a completed/skipped resource on the path
         if completed_resource_id is not None:
             self._complete_item(items, completed_resource_id)
+        if request.completed_item_id is not None:
+            self._complete_item_by_id(items, request.completed_item_id)
         if skipped_resource_id is not None:
             skipped = self._skip_item(items, skipped_resource_id)
             if skipped is not None:
@@ -138,6 +143,26 @@ class AdaptiveLearningService(BaseService):
                         path, items, change.skill_id
                     )
 
+        # 3b) Material exhaustion. A strong assessment score is the fast
+        # unlock above; this is the safety net — with every actionable item
+        # completed or skipped, the next milestone opens anyway, because a
+        # milestone without an assessment must never dead-end the roadmap.
+        if path is not None and not unlocked:
+            for item in unlock_if_exhausted(items):
+                unlocked.append(
+                    MilestoneRead(
+                        skill_id=self._item_skill_id(item),
+                        title=(item.rationale_trace or {}).get("milestone") or item.title,
+                        phase_title=(item.rationale_trace or {}).get("phase_title") or "",
+                        phase_index=item.milestone_index,
+                    )
+                )
+
+        # 3c) Progress is event-sourced: every summary derives from the event
+        # log, so a status the adaptive engine changes without an event is a
+        # completion the dashboard can never see. Append one per transition.
+        self._record_events(request, trigger, items, status_before)
+
         # 4) recalculate the path total and persist everything
         if path is not None:
             path.total_estimated_minutes = sum(i.estimated_minutes for i in items)
@@ -168,6 +193,12 @@ class AdaptiveLearningService(BaseService):
         if request.completed_resource_id is not None:
             changes = await self._from_completion(request.user_id, request.completed_resource_id)
             return "resource_completed", changes, request.completed_resource_id, None
+        if request.completed_item_id is not None:
+            # A path item with no resource behind it (self-study review, in-app
+            # project). Completing it is real progress on the path but weak
+            # evidence about the skill — the item completes, the milestone and
+            # unlock cascade run, and proficiency is left to assessments.
+            return "item_completed", [], None, None
         if request.skipped_resource_id is not None:
             return "resource_skipped", [], None, request.skipped_resource_id
         changes = await self._from_explicit(request)
@@ -254,6 +285,47 @@ class AdaptiveLearningService(BaseService):
     def _complete_item(items: list[LearningPathItem], resource_id: uuid.UUID) -> None:
         for item in items:
             if item.resource_id == resource_id and item.status != PathItemStatus.COMPLETED:
+                item.status = PathItemStatus.COMPLETED
+
+    def _record_events(
+        self,
+        request: AdaptiveUpdateRequest,
+        trigger: str,
+        items: list[LearningPathItem],
+        status_before: dict[uuid.UUID, PathItemStatus],
+    ) -> None:
+        for item in items:
+            if item.id not in status_before or status_before[item.id] == item.status:
+                continue
+            if item.status == PathItemStatus.COMPLETED:
+                event_type, pct = ProgressEventType.COMPLETED, 100.0
+            elif item.status == PathItemStatus.SKIPPED:
+                event_type, pct = ProgressEventType.SKIPPED, 0.0
+            else:
+                continue
+            # Reported time belongs to the item the learner actually acted on,
+            # not to items a milestone cascade completed alongside it.
+            explicit = (
+                item.id == request.completed_item_id
+                or (item.resource_id is not None
+                    and item.resource_id == request.completed_resource_id)
+            )
+            self.session.add(
+                UserProgress(
+                    user_id=request.user_id,
+                    path_item_id=item.id,
+                    resource_id=item.resource_id,
+                    event_type=event_type,
+                    progress_pct=pct,
+                    time_spent_minutes=(request.time_spent_minutes or 0) if explicit else 0,
+                    details={"source": "adaptive", "trigger": trigger},
+                )
+            )
+
+    @staticmethod
+    def _complete_item_by_id(items: list[LearningPathItem], item_id: uuid.UUID) -> None:
+        for item in items:
+            if item.id == item_id and item.status != PathItemStatus.COMPLETED:
                 item.status = PathItemStatus.COMPLETED
 
     @staticmethod

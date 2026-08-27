@@ -18,6 +18,7 @@ from datetime import date, datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import ForbiddenError, NotFoundError, ValidationError
+from app.core.logging import get_logger
 from app.engines.path import (
     CapstoneInput,
     GoalInput,
@@ -49,8 +50,11 @@ from app.schemas.learning_path import (
 )
 from app.schemas.skill_gap import RequiredSkillInput, SkillGapAnalyzeRequest
 from app.services.base import BaseService
+from app.services.path_unlock import unlock_if_exhausted
 from app.services.skill_gap_service import SkillGapService
 from app.services.skill_resolver import SkillResolver
+
+logger = get_logger(__name__)
 
 GENERATOR_VERSION = "path-generator-v1"
 #: Resources selected per milestone skill.
@@ -58,10 +62,15 @@ _RESOURCES_PER_MILESTONE = 2
 
 
 class PathGeneratorService(BaseService):
+    #: Inline discovery budget per generation: enough to cover a role graph's
+    #: new skills, small enough that one request can never spend a day's quota.
+    MAX_DISCOVERIES = 5
+
     def __init__(self, session: AsyncSession, llm: "LLMProvider | None" = None) -> None:
         super().__init__(session)
         #: Used only to design role graphs for goals the catalogue cannot name.
         self.llm = llm
+        self._discoveries = 0
         self.gap_service = SkillGapService(session)
         self.resources = ResourceRepository(session)
         self.assessments = AssessmentRepository(session)
@@ -193,6 +202,11 @@ class PathGeneratorService(BaseService):
     ) -> list[MilestoneInput]:
         milestones: list[MilestoneInput] = []
         preferred = set(constraints.preferred_modalities)
+        # A resource may teach several skills on the same roadmap. It is still
+        # watched once: picking it into two milestones both pads the plan's
+        # hours and, worse, marks BOTH copies done when the learner completes
+        # it — later phases then start with phantom progress.
+        used: set[uuid.UUID] = set()
         for gap in computed.analysis.ranked_gaps:
             skill = computed.nodes.get(gap.skill_id)
             if skill is None:
@@ -204,7 +218,8 @@ class PathGeneratorService(BaseService):
                 for pid in gap.prerequisite_ids
                 if pid in computed.nodes
             )
-            picks = await self._select_resources(gap.skill_id, preferred)
+            picks = await self._select_resources(gap.skill_id, preferred, exclude=used)
+            used.update(p.resource_id for p in picks)
             assessment = await self._select_assessment(gap.skill_id)
             milestones.append(
                 MilestoneInput(
@@ -227,20 +242,25 @@ class PathGeneratorService(BaseService):
         return milestones
 
     async def _select_resources(
-        self, skill_id: uuid.UUID, preferred: set[str]
+        self, skill_id: uuid.UUID, preferred: set[str], *, exclude: set[uuid.UUID] = frozenset()
     ) -> tuple[ResourcePick, ...]:
         """Best resources teaching a skill: quality first, preferred modality as a
         tiebreak. Deterministic — a resource that teaches the milestone skill is
-        appropriate by the time the learner reaches this phase."""
-        candidates = await self.resources.list(
-            limit=8,
-            filters=[
-                Resource.is_active.is_(True),
-                ResourceRepository.teaches_skill_filter(skill_id),
-                Resource.resource_type != ResourceType.PROJECT,  # projects go in the capstone
-            ],
-            order_by=(Resource.quality_score.desc().nullslast(), Resource.id),
-        )
+        appropriate by the time the learner reaches this phase. `exclude` keeps
+        a resource already planned for an earlier milestone from repeating."""
+        candidates = [
+            c for c in await self._teaching_resources(skill_id) if c.id not in exclude
+        ]
+        if not candidates:
+            # Nothing in the catalogue teaches this skill — typically one the
+            # role designer created minutes ago. A milestone with no content
+            # would become a "Self-study" placeholder, so ask the catalogue
+            # pipeline to find real courses now. The result is persisted:
+            # the search is paid once and every later learner reuses it.
+            await self._discover_content(skill_id)
+            candidates = [
+                c for c in await self._teaching_resources(skill_id) if c.id not in exclude
+            ]
         ranked = sorted(
             candidates,
             key=lambda r: (
@@ -259,6 +279,49 @@ class PathGeneratorService(BaseService):
             )
             for r in ranked[:_RESOURCES_PER_MILESTONE]
         )
+
+    async def _teaching_resources(self, skill_id: uuid.UUID) -> list[Resource]:
+        return await self.resources.list(
+            limit=8,
+            filters=[
+                Resource.is_active.is_(True),
+                ResourceRepository.teaches_skill_filter(skill_id),
+                Resource.resource_type != ResourceType.PROJECT,  # projects go in the capstone
+            ],
+            order_by=(Resource.quality_score.desc().nullslast(), Resource.id),
+        )
+
+    async def _discover_content(self, skill_id: uuid.UUID) -> None:
+        """Best-effort inline catalogue discovery for an untaught skill.
+
+        Off unless a catalogue provider is configured, bounded per generation,
+        and any failure degrades to the self-study placeholder rather than
+        failing the roadmap."""
+        from app.catalogue.base import CatalogueError
+        from app.catalogue.factory import get_catalogue_provider
+        from app.repositories.skill import SkillRepository
+        from app.services.catalogue_service import CatalogueService
+
+        provider = get_catalogue_provider()
+        if provider.name == "none" or self._discoveries >= self.MAX_DISCOVERIES:
+            return
+        skill = await SkillRepository(self.session).get(skill_id)
+        if skill is None:
+            return
+        self._discoveries += 1
+        try:
+            result = await CatalogueService(self.session, provider).discover_for_skill(skill)
+        except CatalogueError as exc:
+            logger.warning(
+                "inline discovery failed; milestone falls back to self-study",
+                extra={"skill": skill.slug, "error": str(exc)[:200]},
+            )
+            return
+        if result.created:
+            logger.info(
+                "inline discovery filled a gap",
+                extra={"skill": skill.slug, "resources_created": len(result.created)},
+            )
 
     async def _select_assessment(self, skill_id: uuid.UUID) -> Assessment | None:
         found = await self.assessments.list(
@@ -429,6 +492,15 @@ class PathGeneratorService(BaseService):
         path = await self.paths.get(path_id)
         assert path is not None
         items = await self.path_items.list_for_path(path_id)
+
+        # Self-heal on read: a path whose actionable items are all completed
+        # or skipped while later milestones stay locked is a dead end (the
+        # exhaustion rule in the adaptive service now prevents it, but paths
+        # from before that rule — or mutated outside it — can still carry the
+        # stuck state). Serving the roadmap repairs it.
+        if unlock_if_exhausted(items):
+            await self.session.flush()
+            await self.commit()
 
         phases: dict[int, RoadmapPhase] = {}
         milestones: dict[tuple[int, str], RoadmapMilestone] = {}

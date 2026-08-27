@@ -68,6 +68,39 @@ def test_default_provider_is_mock() -> None:
     assert isinstance(get_llm_provider(), MockProvider)
 
 
+def test_openai_without_key_resolves_to_claude_when_anthropic_key_exists(monkeypatch) -> None:
+    """Asking for a real model with only the other real model's key configured
+    should use the model that exists, not fail on the one that does not."""
+    from app.core.config import settings
+    from app.llm.factory import resolve_provider_name
+
+    monkeypatch.setattr(settings, "OPENAI_API_KEY", None)
+    monkeypatch.setattr(settings, "ANTHROPIC_API_KEY", "sk-ant-test")
+    assert resolve_provider_name("openai") == "claude"
+
+
+def test_openai_without_any_key_stays_openai(monkeypatch) -> None:
+    """With neither key set there is nothing to substitute — the lazy
+    call-time failure with its clear message must stand unchanged."""
+    from app.core.config import settings
+    from app.llm.factory import resolve_provider_name
+
+    monkeypatch.setattr(settings, "OPENAI_API_KEY", None)
+    monkeypatch.setattr(settings, "ANTHROPIC_API_KEY", None)
+    assert resolve_provider_name("openai") == "openai"
+
+
+def test_openai_with_its_own_key_is_never_substituted(monkeypatch) -> None:
+    from app.core.config import settings
+    from app.llm.factory import resolve_provider_name
+
+    monkeypatch.setattr(settings, "OPENAI_API_KEY", "sk-test")
+    monkeypatch.setattr(settings, "ANTHROPIC_API_KEY", "sk-ant-test")
+    assert resolve_provider_name("openai") == "openai"
+    assert resolve_provider_name("claude") == "claude"
+    assert resolve_provider_name("mock") == "mock"
+
+
 def test_providers_conform_to_interface() -> None:
     for provider in (MockProvider(), ClaudeProvider(), OpenAIProvider()):
         assert isinstance(provider, LLMProvider)

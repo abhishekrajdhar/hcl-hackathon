@@ -1,6 +1,6 @@
 // Rich, presentation-ready model for the personalized roadmap interface.
 // Decoupled from the raw API schemas: built in `roadmap-derive.ts` from the
-// live roadmap + recommendations, or supplied by the bundled `roadmap-demo`.
+// live roadmap + recommendations.
 // Components depend only on these types.
 
 import type { PathItemStatus } from "@/lib/types";
@@ -101,6 +101,8 @@ export interface RoadmapPhase {
 }
 
 export interface RoadmapView {
+  /** Backend path id — empty when no path exists yet. */
+  pathId: string;
   goal: string;
   role: string;
   progressPct: number; // 0..100

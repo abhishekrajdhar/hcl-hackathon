@@ -27,6 +27,7 @@ import {
 } from "@/lib/roadmap-view";
 import type { DashboardData } from "@/lib/dashboard-data";
 import { useProgress } from "@/lib/progress-context";
+import { api } from "@/lib/api";
 import { ResourceModal } from "./ResourceModal";
 
 // Visual identity per state — shared across nodes, badges and rails.
@@ -48,6 +49,7 @@ interface OpenResource {
 export function Roadmap({ data }: { data: DashboardData }) {
   const roadmap: RoadmapView = data.roadmap;
   const [open, setOpen] = useState<OpenResource | null>(null);
+  const { regenerate, pending } = useProgress();
   // Default-expand the current phase (fall back to the first non-completed one).
   const initial =
     roadmap.phases.find((p) => p.state === "current")?.index ??
@@ -69,9 +71,21 @@ export function Roadmap({ data }: { data: DashboardData }) {
         subtitle={`${roadmap.phases.length} phases · ~${roadmap.totalPlannedHours}h to your goal`}
         icon={<IconPath />}
         action={
-          <Badge tone="brand">
-            <IconLayers className="h-3.5 w-3.5" /> {roadmap.progressPct}% complete
-          </Badge>
+          <div className="flex items-center gap-2">
+            {roadmap.pathId && (
+              <button
+                onClick={() => regenerate(roadmap.pathId)}
+                disabled={pending}
+                title="Rebuild the roadmap from your current profile and the latest catalogue — useful when new courses have been added for your skills"
+                className="rounded-md border border-border bg-surface-2 px-2 py-1 text-[11px] font-medium text-muted transition-colors hover:text-fg disabled:opacity-50"
+              >
+                {pending ? "Rebuilding…" : "Regenerate"}
+              </button>
+            )}
+            <Badge tone="brand">
+              <IconLayers className="h-3.5 w-3.5" /> {roadmap.progressPct}% complete
+            </Badge>
+          </div>
         }
       />
       <CardBody>
@@ -84,6 +98,7 @@ export function Roadmap({ data }: { data: DashboardData }) {
               <Connector state={phase.state} />
               <PhaseNode
                 phase={phase}
+                pathId={roadmap.pathId}
                 expanded={expanded.has(phase.index)}
                 onToggle={() => toggle(phase.index)}
                 onOpenResource={(resource, milestone) => setOpen({ resource, milestone })}
@@ -153,11 +168,13 @@ function stateText(state: RoadmapState) {
 
 function PhaseNode({
   phase,
+  pathId,
   expanded,
   onToggle,
   onOpenResource,
 }: {
   phase: RoadmapPhase;
+  pathId: string;
   expanded: boolean;
   onToggle: () => void;
   onOpenResource: (r: RoadmapResource, m: RoadmapMilestone) => void;
@@ -229,7 +246,7 @@ function PhaseNode({
       {expanded && (
         <div className="space-y-3 border-t border-border p-4">
           {phase.milestones.map((m) => (
-            <MilestoneCard key={m.id} milestone={m} onOpenResource={onOpenResource} />
+            <MilestoneCard key={m.id} milestone={m} pathId={pathId} onOpenResource={onOpenResource} />
           ))}
         </div>
       )}
@@ -241,11 +258,15 @@ function PhaseNode({
 
 function MilestoneCard({
   milestone: m,
+  pathId,
   onOpenResource,
 }: {
   milestone: RoadmapMilestone;
+  pathId: string;
   onOpenResource: (r: RoadmapResource, m: RoadmapMilestone) => void;
 }) {
+  const assessmentWhy = useWhyThis(pathId, m.assessment?.id ?? "", "why_assessment", "");
+  const projectWhy = useWhyThis(pathId, m.project?.id ?? "", "why_project", "");
   const s = STATE[m.state];
   const locked = m.state === "locked";
   const { submitAssessment, completeResource, pending } = useProgress();
@@ -287,28 +308,15 @@ function MilestoneCard({
         </div>
       )}
 
-      {/* Two different measurements, so they are labelled as such. The bar is
-          PROFICIENCY against the goal's target; the figure on the right is how
-          much of the material is done. Left unlabelled, "100% complete" beside
-          "75%" reads as a contradiction. */}
-      <div className="mt-2.5">
-        <ProgressBar value={m.current} target={m.required} tone={s.bar} />
-        <div className="mt-1 flex justify-between text-[11px] text-muted">
-          <span>
-            <span className="text-fg">{Math.round(m.current * 100)}%</span> proficiency · target{" "}
-            {Math.round(m.required * 100)}%
-          </span>
-          <span>{m.completionPct}% of material done</span>
-        </div>
-        {/* The case that caused the confusion: everything finished, level not
-            yet reached. Say so plainly instead of implying the two agree. */}
-        {m.completionPct === 100 && m.current < m.required && (
-          <p className="mt-1.5 text-[11px] text-cyan">
-            Material finished — proficiency is still {Math.round((m.required - m.current) * 100)}
-            {" "}points below target. An assessment result will move it.
-          </p>
-        )}
-      </div>
+      {/* No per-milestone proficiency bar: the phase header already carries
+          progress, and a proficiency readout here invited misreading against
+          "material done". The one message worth keeping is the finished-but-
+          not-yet-passed state, said in words. */}
+      {m.completionPct === 100 && m.current < m.required && (
+        <p className="mt-2 text-[11px] text-cyan">
+          Material finished — an assessment result is what moves your proficiency to target.
+        </p>
+      )}
 
       {/* locked → prerequisites */}
       {locked && m.prerequisites.length > 0 && (
@@ -337,6 +345,7 @@ function MilestoneCard({
               key={r.id}
               resource={r}
               milestone={m}
+              pathId={pathId}
               onOpen={() => onOpenResource(r, m)}
             />
           ))}
@@ -348,12 +357,16 @@ function MilestoneCard({
               meta={`Checkpoint · ${Math.round(m.assessment.passingPct * 100)}% to pass · ${hoursFromMinutes(m.assessment.estimatedMinutes)}`}
               state={m.assessment.status}
               action={
-                m.assessment.status !== "locked" && m.assessment.status !== "completed" ? (
-                  <RowButton disabled={pending} onClick={() => submitAssessment(m, passScore)}>
-                    Submit result
-                  </RowButton>
-                ) : undefined
+                <>
+                  {m.assessment.status !== "locked" && m.assessment.status !== "completed" && (
+                    <RowButton disabled={pending} onClick={() => submitAssessment(m, passScore)}>
+                      Submit result
+                    </RowButton>
+                  )}
+                  <WhyButton state={assessmentWhy} />
+                </>
               }
+              detail={<WhyPanel state={assessmentWhy} />}
             />
           )}
 
@@ -364,15 +377,19 @@ function MilestoneCard({
               meta={`Project · ${hoursFromMinutes(m.project.estimatedMinutes)}`}
               state={m.project.status}
               action={
-                m.project.status !== "locked" && m.project.status !== "completed" ? (
-                  <RowButton
-                    disabled={pending}
-                    onClick={() => completeResource(m, projectAsResource(m))}
-                  >
-                    Mark complete
-                  </RowButton>
-                ) : undefined
+                <>
+                  {m.project.status !== "locked" && m.project.status !== "completed" && (
+                    <RowButton
+                      disabled={pending}
+                      onClick={() => completeResource(m, projectAsResource(m))}
+                    >
+                      Mark complete
+                    </RowButton>
+                  )}
+                  <WhyButton state={projectWhy} />
+                </>
               }
+              detail={<WhyPanel state={projectWhy} />}
             />
           )}
         </div>
@@ -422,18 +439,88 @@ function RowButton({
   );
 }
 
+// ---- "Why this?" — grounded, per-item, fetched on demand -------------------
+
+interface WhyThisState {
+  open: boolean;
+  toggle: () => void;
+  text: string | null;
+  loading: boolean;
+}
+
+/**
+ * Lazily fetches the grounded explanation for one path item the first time
+ * the learner asks. The backend composes it from the item's persisted
+ * rationale and the live proficiency records (LLM-rephrased behind a
+ * grounding check); the recommendation reason, when one exists, is only the
+ * offline fallback.
+ */
+function useWhyThis(pathId: string, itemId: string, kind: string, fallback: string): WhyThisState {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const toggle = () => {
+    setOpen((o) => !o);
+    if (text !== null || loading) return;
+    if (!pathId || !itemId) {
+      setText(fallback || "No rationale is available for this item.");
+      return;
+    }
+    setLoading(true);
+    api
+      .explainPathItem(pathId, itemId, kind)
+      .then((res) => setText(res.explanation))
+      .catch(() => setText(fallback || "No rationale is available for this item."))
+      .finally(() => setLoading(false));
+  };
+  return { open, toggle, text, loading };
+}
+
+function WhyButton({ state }: { state: WhyThisState }) {
+  return (
+    <button
+      onClick={state.toggle}
+      className={clsx(
+        "inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium transition-colors",
+        state.open
+          ? "border-brand bg-brand-soft text-brand"
+          : "border-border bg-surface-2 text-muted hover:text-fg",
+      )}
+    >
+      <IconSpark className="h-3 w-3" /> Why this?
+    </button>
+  );
+}
+
+function WhyPanel({ state }: { state: WhyThisState }) {
+  if (!state.open) return null;
+  return (
+    <p className="border-t border-border bg-brand-soft/40 px-3 py-2 text-xs text-fg/90">
+      <span className="font-semibold text-brand">Why this? </span>
+      {state.loading ? "Reading your roadmap evidence…" : state.text}
+    </p>
+  );
+}
+
 // ---- resource row (clickable → modal; "Why this?" → inline reveal) ---------
 
 function ResourceRow({
   resource: r,
   milestone,
+  pathId,
   onOpen,
 }: {
   resource: RoadmapResource;
   milestone: RoadmapMilestone;
+  pathId: string;
   onOpen: () => void;
 }) {
-  const [whyOpen, setWhyOpen] = useState(false);
+  const why = useWhyThis(
+    pathId,
+    r.id,
+    r.kind === "project" ? "why_project" : "why_course",
+    r.why,
+  );
   const { completeResource, pending } = useProgress();
   const s = STATE[r.status];
   const done = r.status === "completed";
@@ -463,19 +550,7 @@ function ResourceRow({
             <IconCheck className="h-3 w-3" /> Done
           </span>
         )}
-        {r.why && (
-          <button
-            onClick={() => setWhyOpen((o) => !o)}
-            className={clsx(
-              "inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium transition-colors",
-              whyOpen
-                ? "border-brand bg-brand-soft text-brand"
-                : "border-border bg-surface-2 text-muted hover:text-fg",
-            )}
-          >
-            <IconSpark className="h-3 w-3" /> Why this?
-          </button>
-        )}
+        <WhyButton state={why} />
         <button
           onClick={onOpen}
           aria-label="Open details"
@@ -486,12 +561,7 @@ function ResourceRow({
           </svg>
         </button>
       </div>
-      {whyOpen && r.why && (
-        <p className="border-t border-border bg-brand-soft/40 px-3 py-2 text-xs text-fg/90">
-          <span className="font-semibold text-brand">Why this? </span>
-          {r.why}
-        </p>
-      )}
+      <WhyPanel state={why} />
     </div>
   );
 }
@@ -504,16 +574,19 @@ function ItemRow({
   meta,
   state,
   action,
+  detail,
 }: {
   icon: React.ReactNode;
   label: string;
   meta: string;
   state: RoadmapState;
   action?: React.ReactNode;
+  detail?: React.ReactNode;
 }) {
   const s = STATE[state];
   return (
-    <div className="flex items-center gap-2 rounded-lg border border-border bg-surface p-2">
+    <div className="rounded-lg border border-border bg-surface">
+      <div className="flex items-center gap-2 p-2">
       <span
         className={clsx(
           "grid h-6 w-6 shrink-0 place-items-center rounded-md",
@@ -532,6 +605,8 @@ function ItemRow({
       </div>
       {action}
       <span className={clsx("h-1.5 w-1.5 shrink-0 rounded-full", s.rail)} title={STATE_LABEL[state]} />
+      </div>
+      {detail}
     </div>
   );
 }

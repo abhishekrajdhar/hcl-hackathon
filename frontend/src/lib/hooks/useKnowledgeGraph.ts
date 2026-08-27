@@ -10,7 +10,6 @@ import {
   toProficiencies,
   type GraphProficiency,
 } from "@/lib/graph-derive";
-import { demoGraph } from "@/lib/graph-demo";
 import type { GraphModel } from "@/lib/graph-view";
 import type { SkillGraphResponse, SkillListItem } from "@/lib/types";
 
@@ -26,26 +25,28 @@ interface State {
   error: string | null;
 }
 
+const EMPTY: GraphModel = { nodes: [], edges: [], goal: "" };
+
 /**
  * Loads the learner's knowledge graph: the prerequisite closure of the skills
  * their goal targets, coloured by the proficiencies the dashboard already
- * holds. Falls back to the bundled demo graph when signed out or when the
- * account has no path yet — the same rule the rest of the dashboard follows.
+ * holds. The demo session is a real account, so it flows through the same
+ * live path; with no session or no path the graph is honestly empty.
  */
-export function useKnowledgeGraph(data: DashboardData, dashboardIsDemo: boolean) {
+export function useKnowledgeGraph(data: DashboardData) {
   const [state, setState] = useState<State>({
-    graph: demoGraph,
+    graph: EMPTY,
     proficiencies: [],
     loading: true,
-    isDemo: true,
+    isDemo: false,
     error: null,
   });
 
   const load = useCallback(async () => {
     setState((s) => ({ ...s, loading: true, error: null }));
 
-    if (!getToken() || dashboardIsDemo) {
-      setState({ graph: demoGraph, proficiencies: [], loading: false, isDemo: true, error: null });
+    if (!getToken()) {
+      setState({ graph: EMPTY, proficiencies: [], loading: false, isDemo: false, error: null });
       return;
     }
 
@@ -69,7 +70,7 @@ export function useKnowledgeGraph(data: DashboardData, dashboardIsDemo: boolean)
       const targetSlugs = goalSlugs(roadmapSlugs, proficiencies);
       const expandSlugs = pickExpandSlugs(roadmapSlugs, proficiencies, MAX_TARGETS);
       if (!expandSlugs.length) {
-        setState({ graph: demoGraph, proficiencies: [], loading: false, isDemo: true, error: null });
+        setState({ graph: EMPTY, proficiencies: [], loading: false, isDemo: false, error: null });
         return;
       }
 
@@ -80,7 +81,7 @@ export function useKnowledgeGraph(data: DashboardData, dashboardIsDemo: boolean)
         .filter((id): id is string => Boolean(id));
 
       if (!targetIds.length) {
-        setState({ graph: demoGraph, proficiencies: [], loading: false, isDemo: true, error: null });
+        setState({ graph: EMPTY, proficiencies: [], loading: false, isDemo: false, error: null });
         return;
       }
 
@@ -95,7 +96,7 @@ export function useKnowledgeGraph(data: DashboardData, dashboardIsDemo: boolean)
       ).filter((c): c is SkillGraphResponse => Boolean(c));
 
       if (!closures.length) {
-        setState({ graph: demoGraph, proficiencies: [], loading: false, isDemo: true, error: null });
+        setState({ graph: EMPTY, proficiencies: [], loading: false, isDemo: false, error: null });
         return;
       }
 
@@ -110,14 +111,14 @@ export function useKnowledgeGraph(data: DashboardData, dashboardIsDemo: boolean)
       setState({ graph, proficiencies, loading: false, isDemo: false, error: null });
     } catch (e) {
       setState({
-        graph: demoGraph,
+        graph: EMPTY,
         proficiencies: [],
         loading: false,
-        isDemo: true,
+        isDemo: false,
         error: e instanceof Error ? e.message : "Failed to load the skill graph",
       });
     }
-  }, [data.goal, data.roadmap, dashboardIsDemo]);
+  }, [data.goal, data.roadmap]);
 
   useEffect(() => {
     void load();

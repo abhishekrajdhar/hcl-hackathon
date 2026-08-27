@@ -17,6 +17,7 @@ from app.routers import (
     paths,
     profiles,
     progress,
+    public,
     recommendations,
     resources,
     search,
@@ -55,5 +56,6 @@ api_router.include_router(adaptive.router)
 api_router.include_router(chat.router)
 api_router.include_router(discovery.router)
 api_router.include_router(readiness.router)
+api_router.include_router(public.router)
 
 __all__ = ["api_router", "health_router"]

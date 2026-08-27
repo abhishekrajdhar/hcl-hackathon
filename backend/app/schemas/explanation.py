@@ -43,7 +43,9 @@ class RecommendationEvidence(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-    recommendation_id: uuid.UUID
+    #: Set when the evidence was assembled for a stored recommendation; None
+    #: when it was assembled directly for a learning-path item.
+    recommendation_id: uuid.UUID | None = None
     resource_title: str
     resource_type: str
     resource_difficulty: int
@@ -63,6 +65,18 @@ class ExplanationRequest(BaseModel):
     kind: ExplanationKind = "why_course"
     #: Force the deterministic template instead of the LLM.
     use_llm: bool = True
+
+
+class PathItemExplanationResponse(BaseModel):
+    """Why one roadmap item is on the learner's path — grounded in the item's
+    persisted rationale and the learner's current evidence, never invented."""
+
+    item_id: uuid.UUID
+    kind: ExplanationKind
+    explanation: str
+    grounded: bool
+    source: Literal["llm", "template"]
+    evidence: RecommendationEvidence
 
 
 class ExplanationResponse(BaseModel):

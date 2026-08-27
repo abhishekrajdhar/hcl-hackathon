@@ -9,7 +9,7 @@
 // is produced locally via `simulateAdaptive` so the loop is fully demonstrable.
 
 import { createContext, useCallback, useContext, useState } from "react";
-import { progressApi } from "@/lib/api";
+import { api, progressApi } from "@/lib/api";
 import { useToast } from "@/lib/hooks/useToast";
 import {
   buildAdaptiveNotice,
@@ -22,6 +22,7 @@ import type { AdaptiveUpdateResponse, FeedbackSignal } from "@/lib/types";
 
 interface ProgressActions {
   pending: boolean;
+  regenerate: (pathId: string) => Promise<void>;
   completeResource: (m: RoadmapMilestone, r: RoadmapResource) => Promise<void>;
   skipResource: (m: RoadmapMilestone, r: RoadmapResource) => Promise<void>;
   submitAssessment: (m: RoadmapMilestone, score: number) => Promise<void>;
@@ -48,8 +49,10 @@ export function ProgressProvider({
   const { notify } = useToast();
   const [pending, setPending] = useState(false);
 
-  // Live when we have a real account and the item carries a backend id; else demo.
-  const canGoLive = !isDemo && !!userId;
+  // Live whenever we have a signed-in account — the demo account included,
+  // since it is a real seeded learner served by the live API. The local
+  // simulation remains only for items that carry no backend id at all.
+  const canGoLive = !!userId;
 
   // Run a real adaptive call or the local simulation, then animate + notify + refresh.
   const runAdaptive = useCallback(
@@ -77,12 +80,43 @@ export function ProgressProvider({
     [pending, data, applyAdaptive, notify, reload],
   );
 
+  const regenerate = useCallback(
+    async (pathId: string) => {
+      if (pending || !pathId) return;
+      setPending(true);
+      try {
+        await api.regeneratePath(pathId);
+        notify({
+          title: "Roadmap rebuilt",
+          body: "Your route was re-planned from your current profile and the latest catalogue.",
+          tone: "success",
+        });
+        reload();
+      } catch {
+        notify({
+          title: "Couldn't rebuild the roadmap",
+          body: "The generator didn't respond. Please try again.",
+          tone: "neutral",
+        });
+      } finally {
+        setPending(false);
+      }
+    },
+    [pending, notify, reload],
+  );
+
   const completeResource = useCallback(
     async (m: RoadmapMilestone, r: RoadmapResource) => {
-      const live =
-        canGoLive && r.resourceId
+      // Resource-backed items complete by resource id; items with no resource
+      // behind them (self-study reviews, in-app projects) complete by their
+      // path-item id — both persist and both run the unlock cascade.
+      const live = canGoLive
+        ? r.resourceId
           ? () => progressApi.adaptiveUpdate({ user_id: userId!, completed_resource_id: r.resourceId })
-          : null;
+          : r.id
+            ? () => progressApi.adaptiveUpdate({ user_id: userId!, completed_item_id: r.id })
+            : null
+        : null;
       await runAdaptive(live, { kind: "complete", skill: m.skill, resourceTitle: r.title });
     },
     [canGoLive, userId, runAdaptive],
@@ -143,7 +177,9 @@ export function ProgressProvider({
   );
 
   return (
-    <Ctx.Provider value={{ pending, completeResource, skipResource, submitAssessment, sendFeedback }}>
+    <Ctx.Provider
+      value={{ pending, regenerate, completeResource, skipResource, submitAssessment, sendFeedback }}
+    >
       {children}
     </Ctx.Provider>
   );

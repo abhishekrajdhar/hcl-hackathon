@@ -224,3 +224,24 @@ async def test_requires_auth(api: AsyncClient) -> None:
     r = await api.post("/learning-path/generate", json={"user_id": str(uuid.uuid4()), "goal_text": "x",
                                                         "target_skills": [{"skill_slug": "python", "required_level": 0.8}]})
     assert r.status_code == 401
+
+
+async def test_no_resource_is_planned_twice(api: AsyncClient) -> None:
+    """A resource teaching several roadmap skills is still watched once.
+
+    Planned twice, it pads the plan's hours — and completing it marks BOTH
+    copies done, so later phases start with phantom progress and items the
+    learner never touched read as completed.
+    """
+    uid, email = await _learner_with_skills()
+    h = await _auth(api, email)
+    body = (await api.post("/learning-path/generate", headers=h, json=_request(uid))).json()
+
+    resource_ids = [
+        r["resource_id"]
+        for ph in body["phases"]
+        for m in ph["milestones"]
+        for r in m["resources"]
+        if r.get("resource_id")
+    ]
+    assert len(resource_ids) == len(set(resource_ids)), "a resource appears in two milestones"

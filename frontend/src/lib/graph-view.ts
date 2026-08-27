@@ -1,6 +1,6 @@
 // Presentation model for the skill knowledge graph, plus the pure layered-DAG
 // layout that positions it. Decoupled from the API schemas: built in
-// `graph-derive.ts` from the live graph, or supplied by `graph-demo.ts`.
+// `graph-derive.ts` from the live graph.
 //
 // Nothing here touches the network, the clock or React — given the same nodes
 // and edges it always produces the same picture, which is what makes the graph

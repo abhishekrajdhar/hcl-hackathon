@@ -15,7 +15,6 @@ import type {
   RecommendationResponse,
 } from "@/lib/types";
 import { buildRoadmapView } from "@/lib/roadmap-derive";
-import { demoRoadmap } from "@/lib/roadmap-demo";
 
 export function masteryFromPct(p: number): string {
   if (p >= 0.9) return "strong_mastery";
@@ -180,11 +179,11 @@ export function buildDashboardData(input: {
   const role = p.target_role || "your goal";
   const progressPct = Math.round(progress?.completion_pct ?? 0);
 
-  // Rich roadmap model — real when we have a path, else the demo so the
-  // roadmap interface stays meaningful.
+  // Rich roadmap model — real when we have a path, else an honest empty state
+  // (the UI invites the learner to generate one, never shows a stranger's).
   const roadmapView = roadmap
     ? buildRoadmapView(roadmap, recommendations, goal, role, progressPct)
-    : demoRoadmap;
+    : { pathId: "", goal, role, progressPct: 0, totalPlannedHours: 0, phases: [] };
 
   return {
     goal,

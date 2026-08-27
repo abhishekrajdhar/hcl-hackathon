@@ -37,7 +37,7 @@ const STATE_TERM: Record<MasteryState, string> = {
 };
 
 export function Universe({ data }: { data: DashboardData }) {
-  const { graph, proficiencies, loading, isDemo } = useKnowledgeGraph(data, data.isDemo);
+  const { graph, proficiencies, loading, isDemo } = useKnowledgeGraph(data);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [pulseIds, setPulseIds] = useState<Set<string>>(new Set());
 

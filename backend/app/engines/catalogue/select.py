@@ -106,13 +106,28 @@ def _length_fit(hours: float) -> float:
     return 0.7  # long but usable
 
 
+#: Titles that declare their own language. When the provider reports no
+#: language (the scraper never does), a title saying "in Hindi" is the only
+#: signal available — and creators reliably advertise it, because it is a
+#: selling point to the right audience.
+_TITLE_LANGUAGE = re.compile(
+    r"\bin (hindi|urdu|tamil|telugu|bengali|marathi|spanish|french|german|"
+    r"portuguese|arabic|russian|japanese|chinese|korean|indonesian|vietnamese|turkish)\b"
+    r"|[ऀ-ॿ؀-ۿ一-鿿぀-ヿ가-힯]",
+    re.IGNORECASE,
+)
+
+
 def _language_ok(record: VideoRecord, want: str = "en") -> bool:
     """Unknown language passes. Only a *stated* mismatch is disqualifying —
     most providers report nothing, and rejecting on absence would empty the
-    catalogue."""
-    if not record.language:
-        return True
-    return record.language.split("-")[0].lower() == want
+    catalogue. A title that declares a non-English language (or is written in
+    a non-Latin script) counts as stating it."""
+    if record.language:
+        return record.language.split("-")[0].lower() == want
+    if want == "en" and _TITLE_LANGUAGE.search(record.title):
+        return False
+    return True
 
 
 def score_candidate(

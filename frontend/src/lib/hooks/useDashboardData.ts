@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, api, auth, getToken } from "@/lib/api";
 import type { DashboardData } from "@/lib/dashboard-data";
+import { emptyDashboardData } from "@/lib/dashboard-data";
 import { buildDashboardData } from "@/lib/derive";
-import { demoData } from "@/lib/demo";
+import { isDemoEmail } from "@/lib/demo-session";
 import { patchDashboardFromAdaptive } from "@/lib/adaptive";
 import type {
   AdaptiveUpdateResponse,
@@ -17,39 +18,52 @@ type State = {
   data: DashboardData;
   loading: boolean;
   error: string | null;
+  /** Signed in as the shared demo account — real data, shared journey. */
   isDemo: boolean;
   /** Signed in, but no profile yet — this learner has not been onboarded. */
   needsOnboarding: boolean;
+  /**
+   * Profile and goal exist but no active roadmap does — onboarding was
+   * interrupted, or the path was deleted. The dashboard offers to generate
+   * one from the stored goal rather than showing an empty universe.
+   */
+  missingPath: { userId: string; goalText: string } | null;
 };
 
-// Loads the signed-in learner's dashboard through the API layer, falling back to
-// the bundled demo dataset when signed out or when core data is unavailable.
+// Loads the signed-in learner's dashboard through the API layer. There is no
+// bundled dataset: every session — the shared demo account included — renders
+// what the backend computed for it, or an honest empty/error state.
 export function useDashboardData(): State & {
   reload: () => void;
   applyAdaptive: (res: AdaptiveUpdateResponse) => void;
 } {
   const [state, setState] = useState<State>({
-    data: demoData,
+    data: emptyDashboardData(),
     loading: true,
     error: null,
-    isDemo: true,
+    isDemo: false,
     needsOnboarding: false,
+    missingPath: null,
   });
 
   const load = useCallback(async () => {
     setState((s) => ({ ...s, loading: true, error: null }));
     if (!getToken()) {
+      // Signed out. The dashboard route either redirects to /login or is
+      // busy signing into the demo account; render nothing in the meantime.
       setState({
-        data: demoData,
+        data: emptyDashboardData(),
         loading: false,
         error: null,
-        isDemo: true,
+        isDemo: false,
         needsOnboarding: false,
+        missingPath: null,
       });
       return;
     }
     try {
       const user = await auth.me();
+      const isDemo = isDemoEmail(user.email);
       const [profile, roadmap] = await Promise.all([
         api.getFullProfile(user.id),
         api.getLearningPath(user.id).catch(() => null),
@@ -73,31 +87,38 @@ export function useDashboardData(): State & {
       ]);
 
       const data = buildDashboardData({ profile, roadmap, progress, recommendations, events: eventsPage });
-      setState({ data, loading: false, error: null, isDemo: false, needsOnboarding: false });
+      const goalText = profile.profile.goal_text_raw || profile.profile.target_role || "";
+      setState({
+        data: { ...data, isDemo },
+        loading: false,
+        error: null,
+        isDemo,
+        needsOnboarding: false,
+        missingPath: !roadmap && goalText ? { userId: user.id, goalText } : null,
+      });
     } catch (e) {
       // Signed in but with no profile yet: a NEW learner, not an error. They
       // go to onboarding.
       if (e instanceof ApiError && e.status === 404) {
         setState({
-          data: demoData,
+          data: emptyDashboardData(),
           loading: false,
           error: null,
-          isDemo: true,
+          isDemo: false,
           needsOnboarding: true,
+          missingPath: null,
         });
         return;
       }
-      // Any OTHER failure must NOT fall back to the demo. Swapping a stranger's
-      // journey in for a signed-in learner's own data is worse than showing an
-      // error: it looks like real data, so a backend learner sees an ML roadmap
-      // and reasonably concludes the product is broken. Surface the failure and
-      // let them retry.
+      // A failure renders as a failure. Substituting anything that looks like
+      // data would tell a signed-in learner a story that is not theirs.
       setState({
-        data: demoData,
+        data: emptyDashboardData(),
         loading: false,
         error: e instanceof Error ? e.message : "Failed to load your data",
         isDemo: false,
         needsOnboarding: false,
+        missingPath: null,
       });
     }
   }, []);
@@ -107,7 +128,7 @@ export function useDashboardData(): State & {
   }, [load]);
 
   // Apply an adaptive result to the in-memory data so skill/roadmap bars animate
-  // immediately. In live mode `reload()` then reconciles with backend truth.
+  // immediately. `reload()` then reconciles with backend truth.
   const applyAdaptive = useCallback((res: AdaptiveUpdateResponse) => {
     setState((s) => ({ ...s, data: patchDashboardFromAdaptive(s.data, res) }));
   }, []);

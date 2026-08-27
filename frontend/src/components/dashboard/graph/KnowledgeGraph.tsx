@@ -15,7 +15,7 @@ const ZOOMS = [0.75, 1, 1.25];
 
 /** The knowledge-graph tab: the prerequisite DAG, coloured by mastery. */
 export function KnowledgeGraph({ data }: { data: DashboardData }) {
-  const { graph, proficiencies, loading, isDemo } = useKnowledgeGraph(data, data.isDemo);
+  const { graph, proficiencies, loading, isDemo } = useKnowledgeGraph(data);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
 

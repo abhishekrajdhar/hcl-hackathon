@@ -74,6 +74,36 @@ export interface ActivityDatum {
   minutes: number;
 }
 
+/** Zero-state placeholder for loading and error states. Deliberately empty —
+ * a journey nobody took must never be dressed up as data. */
+export function emptyDashboardData(): DashboardData {
+  return {
+    goal: "",
+    role: "",
+    progressPct: 0,
+    weeklyHours: 0,
+    skills: [],
+    phases: [],
+    milestones: [],
+    roadmap: { pathId: "", goal: "", role: "", progressPct: 0, totalPlannedHours: 0, phases: [] },
+    currentMilestone: "—",
+    nextAction: null,
+    recommendations: [],
+    assessments: [],
+    activity: [],
+    pace: { label: "unknown", ratio: 0, sampleSize: 0, weeksRemaining: null },
+    stats: {
+      skillsTracked: 0,
+      itemsCompleted: 0,
+      itemsTotal: 0,
+      hoursSpent: 0,
+      totalPlannedHours: 0,
+      avgAssessment: 0,
+    },
+    isDemo: false,
+  };
+}
+
 export interface DashboardData {
   goal: string;
   role: string;
