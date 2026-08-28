@@ -12,11 +12,9 @@ import { KnowledgeGraph } from "@/components/dashboard/graph/KnowledgeGraph";
 import { Universe } from "@/components/dashboard/universe/Universe";
 import { StatusHud } from "@/components/dashboard/StatusHud";
 import { DemoBanner, GeneratePathBanner, LoadErrorBanner } from "@/components/dashboard/DataBanner";
-import { Milestones } from "@/components/dashboard/Milestones";
 import { Recommendations } from "@/components/dashboard/Recommendations";
 import { Assessments } from "@/components/dashboard/Assessments";
 import { Assistant } from "@/components/dashboard/Assistant";
-import { SystemStatus } from "@/components/dashboard/SystemStatus";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Toaster } from "@/components/ui/Toaster";
 import { ToastProvider } from "@/lib/hooks/useToast";
@@ -184,13 +182,8 @@ function DashboardView() {
               <Roadmap data={data} />
             </div>
 
-            <div className="grid gap-4 lg:grid-cols-3">
-              <div id="path" className="lg:col-span-2 scroll-mt-16">
-                <LearningPath data={data} />
-              </div>
-              <div id="milestones" className="scroll-mt-16">
-                <Milestones data={data} />
-              </div>
+            <div id="path" className="scroll-mt-16">
+              <LearningPath data={data} />
             </div>
 
             <div id="skills" className="scroll-mt-16">
@@ -221,9 +214,6 @@ function DashboardView() {
               />
             </div>
 
-            <div id="system" className="scroll-mt-16">
-              <SystemStatus />
-            </div>
 
             {loading && <p className="py-2 text-center text-xs text-muted">Refreshing your data…</p>}
           </div>

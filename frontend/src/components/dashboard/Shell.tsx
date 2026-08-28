@@ -5,7 +5,6 @@ import { useEffect, useState } from "react";
 import { clsx } from "@/lib/cn";
 import {
   IconBook,
-  IconActivity,
   IconChart,
   IconChat,
   IconClipboard,
@@ -29,11 +28,9 @@ const NAV = [
   { id: "path", label: "Learning Path", icon: IconPath },
   { id: "skills", label: "Skill Progress", icon: IconChart },
   { id: "graph", label: "Knowledge Graph", icon: IconGraph },
-  { id: "milestones", label: "Milestones", icon: IconFlag },
   { id: "recommendations", label: "Recommended", icon: IconBook },
   { id: "assessments", label: "Assessments", icon: IconClipboard },
   { id: "assistant", label: "AI Coach", icon: IconChat },
-  { id: "system", label: "System", icon: IconActivity },
 ];
 
 /**
