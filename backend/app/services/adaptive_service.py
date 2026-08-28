@@ -138,7 +138,12 @@ class AdaptiveLearningService(BaseService):
                     removed += self._skip_introductory(items, change.skill_id)
                 if decision.unlock_next_milestone:
                     unlocked += self._unlock_next(items)
-                if decision.insert_remediation or decision.recommend_remedial:
+                # Remediation is inserted only on HARD evidence — a failed
+                # assessment. A completion at a low recorded level used to
+                # qualify too (recommend_remedial), which meant finishing a
+                # course could grow the very phase just finished; a planned
+                # roadmap stays as planned until a score proves it shouldn't.
+                if decision.insert_remediation:
                     newly_recommended += await self._insert_remediation(
                         path, items, change.skill_id
                     )

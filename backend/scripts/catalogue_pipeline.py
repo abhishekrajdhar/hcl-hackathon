@@ -31,6 +31,7 @@ from app.catalogue.factory import get_catalogue_provider  # noqa: E402
 from app.core.config import settings  # noqa: E402
 from app.core.logging import configure_logging  # noqa: E402
 from app.db.session import SessionLocal, dispose_engine  # noqa: E402
+from app.llm.factory import get_llm_provider  # noqa: E402
 from app.services.catalogue_service import CatalogueService  # noqa: E402
 
 
@@ -40,7 +41,10 @@ async def run_gaps(
 ) -> int:
     provider = get_catalogue_provider()
     async with SessionLocal() as session:
-        service = CatalogueService(session, provider)
+        # The configured model judges among engine-approved candidates; with
+        # the mock provider its answer fails validation and the engine ranking
+        # stands, so the pipeline still runs credential-free.
+        service = CatalogueService(session, provider, get_llm_provider())
 
         if only:
             skill = await service.skill_by_slug(only)

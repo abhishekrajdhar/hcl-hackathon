@@ -337,3 +337,67 @@ async def test_health_never_deactivates_what_it_could_not_check() -> None:
             {"v": f"{UNIQ}ddddd"},
         )).scalar_one()
     assert still_active is True
+
+
+# --- selection agent ---------------------------------------------------------
+class FakeLLM:
+    """Answers with exactly what a test hands it, or raises."""
+
+    def __init__(self, text: str | None = None, fail: bool = False) -> None:
+        self._text = text
+        self._fail = fail
+        self.calls = 0
+
+    async def complete(self, **kwargs):  # noqa: ANN003
+        from app.llm.base import LLMCompletion, LLMError
+
+        self.calls += 1
+        if self._fail:
+            raise LLMError("model down")
+        return LLMCompletion(text=self._text or "", provider="fake", model="fake")
+
+
+async def test_agent_choice_is_honoured_when_on_shortlist() -> None:
+    """The model may pick among engine-approved candidates — nothing else."""
+    await _make_skill("Vornic Weaving")
+    videos = [
+        _video(f"{UNIQ}agnt{i}", f"Vornic Weaving Course part {i}", channel=f"ch{i}", hours=3.0)
+        for i in range(4)
+    ]
+    # The model prefers the LAST candidate, against the engine's order.
+    llm = FakeLLM(text='{"chosen": ["' + f"{UNIQ}agnt3" + '"]}')
+    async with SessionLocal() as session:
+        service = CatalogueService(session, FakeProvider(videos), llm)
+        skill = await service.skill_by_slug(f"vornic-weaving-{UNIQ}")
+        result = await service.discover_for_skill(skill, picks=1)
+    assert llm.calls == 1
+    assert result.created == ["Vornic Weaving Course part 3"], "the agent's pick must win"
+
+
+async def test_agent_inventing_ids_falls_back_to_engine_ranking() -> None:
+    """An answer naming videos outside the shortlist is discarded entirely —
+    the deterministic floor stands, and the run still produces resources."""
+    await _make_skill("Dresmic Tuning")
+    videos = [
+        _video(f"{UNIQ}drsm{i}", f"Dresmic Tuning Course part {i}", channel=f"ch{i}", hours=3.0)
+        for i in range(3)
+    ]
+    llm = FakeLLM(text='{"chosen": ["not-a-real-video-id"]}')
+    async with SessionLocal() as session:
+        service = CatalogueService(session, FakeProvider(videos), llm)
+        skill = await service.skill_by_slug(f"dresmic-tuning-{UNIQ}")
+        result = await service.discover_for_skill(skill, picks=2)
+    assert len(result.created) == 2, "fallback must still create the engine's picks"
+
+
+async def test_agent_failure_degrades_to_engine_ranking() -> None:
+    await _make_skill("Quorlic Systems")
+    videos = [
+        _video(f"{UNIQ}qrlc{i}", f"Quorlic Systems Course part {i}", channel=f"ch{i}", hours=3.0)
+        for i in range(3)
+    ]
+    async with SessionLocal() as session:
+        service = CatalogueService(session, FakeProvider(videos), FakeLLM(fail=True))
+        skill = await service.skill_by_slug(f"quorlic-systems-{UNIQ}")
+        result = await service.discover_for_skill(skill, picks=2)
+    assert len(result.created) == 2

@@ -28,9 +28,13 @@ from typing import Sequence
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import json
+
 from app.catalogue.base import CatalogueError, CatalogueProvider, QuotaExceededError, VideoRecord
 from app.core.config import settings
 from app.core.logging import get_logger
+from app.llm.base import LLMError, LLMProvider
+from app.llm.parsing import JsonExtractionError, extract_json_object
 from app.engines.catalogue.select import Selection, select_videos, teaching_band
 from app.models.enums import Modality, ResourceType
 from app.models.resource import Resource, ResourcePrerequisite, ResourceSkill
@@ -77,10 +81,45 @@ class HealthReport:
     unknown: list[str] = field(default_factory=list)
 
 
+#: How many engine-approved candidates the selection agent chooses among. More
+#: than the final pick count so the model has real choices; small enough that
+#: every candidate shown to it already passed every hard rule.
+_AGENT_SHORTLIST = 6
+
+_AGENT_SYSTEM_PROMPT = """You choose the best learning videos for a skill from a
+shortlist. Every candidate already passed relevance, length and noise filters —
+your job is judgement: prefer complete, well-structured courses from reputable
+teaching channels over fragmentary or clickbait content, and prefer a set that
+covers the skill from fundamentals upward. Return ONLY candidates from the
+list, by their video_id."""
+
+_AGENT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "chosen": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "video_ids of the selected candidates, best first",
+        }
+    },
+    "required": ["chosen"],
+}
+
+
 class CatalogueService(BaseService):
-    def __init__(self, session: AsyncSession, provider: CatalogueProvider) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        provider: CatalogueProvider,
+        llm: LLMProvider | None = None,
+    ) -> None:
         super().__init__(session)
         self.provider = provider
+        #: Optional judge over the pure selector's shortlist. The engine stays
+        #: the floor: the model may only reorder/choose among candidates the
+        #: engine already approved, and any invalid answer falls back to the
+        #: engine's own ranking.
+        self.llm = llm
         self.resources = ResourceRepository(session)
         self.skills = SkillRepository(session)
         self.prerequisites = PrerequisiteRepository(session)
@@ -144,14 +183,15 @@ class CatalogueService(BaseService):
 
         result.candidates = len(records)
         existing = await self._existing_external_ids()
-        picked = select_videos(
+        shortlist = select_videos(
             records,
             skill.name,
             skill.aliases or (),
-            limit=picks,
+            limit=max(picks, _AGENT_SHORTLIST),
             exclude_ids=frozenset(existing),
             language=settings.CATALOGUE_LANGUAGE,
         )
+        picked = await self._agent_pick(skill, shortlist, picks)
         for selection in picked:
             resource = await self._persist(selection, skill)
             result.created.append(resource.title)
@@ -174,6 +214,60 @@ class CatalogueService(BaseService):
                 results.append(SkillDiscovery(skill_slug=skill.slug, error=str(exc)[:200]))
                 break
         return results
+
+    async def _agent_pick(
+        self, skill: Skill, shortlist: list[Selection], picks: int
+    ) -> list[Selection]:
+        """The best `picks` from the engine-approved shortlist.
+
+        With a model configured it acts as the judge — expert course taste over
+        candidates the pure engine already vetted. Its answer is only accepted
+        when every id it names is on the shortlist; anything else (no model,
+        transport failure, invented ids) falls back to the engine's ranking,
+        so the deterministic floor always stands.
+        """
+        if len(shortlist) <= picks or self.llm is None:
+            return shortlist[:picks]
+
+        by_id = {s.video.video_id: s for s in shortlist}
+        candidates = [
+            {
+                "video_id": s.video.video_id,
+                "title": s.video.title,
+                "channel": s.video.channel,
+                "hours": s.video.duration_hours,
+                "views": s.video.view_count,
+                "engine_score": s.score,
+            }
+            for s in shortlist
+        ]
+        try:
+            completion = await self.llm.complete(
+                system=_AGENT_SYSTEM_PROMPT,
+                user=(
+                    f"Skill to learn: {skill.name}\n"
+                    f"Pick the best {picks} candidates.\n\n"
+                    f"Candidates (JSON):\n{json.dumps(candidates, indent=2)}"
+                ),
+                json_schema=_AGENT_SCHEMA,
+                max_tokens=300,
+            )
+            chosen_ids = extract_json_object(completion.text).get("chosen", [])
+        except (LLMError, JsonExtractionError) as exc:
+            logger.warning(
+                "selection agent unavailable; using engine ranking",
+                extra={"skill": skill.slug, "error": str(exc)[:200]},
+            )
+            return shortlist[:picks]
+
+        chosen = [by_id[v] for v in chosen_ids if isinstance(v, str) and v in by_id]
+        if not chosen:
+            logger.warning(
+                "selection agent answered off-shortlist; using engine ranking",
+                extra={"skill": skill.slug},
+            )
+            return shortlist[:picks]
+        return chosen[:picks]
 
     async def _existing_external_ids(self) -> set[str]:
         rows = await self.session.execute(

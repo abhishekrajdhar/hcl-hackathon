@@ -88,6 +88,11 @@ def configure_logging() -> None:
         logger.handlers.clear()
         logger.propagate = True
 
+    # httpx logs every request URL at INFO — and the YouTube Data API carries
+    # its key as a query parameter, so that line would write the credential
+    # into the logs. Warnings and errors still come through.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 
 

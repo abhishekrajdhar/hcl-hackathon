@@ -579,8 +579,12 @@ deactivated 89 working videos in a single run, so `can_prove_absence` defaults
 to false and a new provider has to earn it. Recovery is unrestricted in the
 other direction — a successful fetch is positive evidence whoever obtained it.
 
-Selection itself is a **pure engine** (`app/engines/catalogue/select.py`): no
-DB, no clock, no network, so the same candidates always yield the same picks.
+Selection is **agentic with a validated floor**, like every model seam here.
+The pure engine (`app/engines/catalogue/select.py`) filters and ranks — no DB,
+no clock, no network — and, when a model is configured, an LLM judge picks the
+best of its approved shortlist (course completeness, channel reputation).
+The model can only choose among candidates the engine already vetted; an
+answer naming anything else is discarded and the engine's own ranking stands.
 It rejects what raw search actually returns — career-advice videos that teach
 nothing ("Roadmap to Become an X"), teasers under nine minutes, runtimes that
 would swallow a learner's whole month, titles that do not match the skill on a

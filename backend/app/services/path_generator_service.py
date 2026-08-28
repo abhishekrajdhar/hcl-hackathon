@@ -310,7 +310,7 @@ class PathGeneratorService(BaseService):
             return
         self._discoveries += 1
         try:
-            result = await CatalogueService(self.session, provider).discover_for_skill(skill)
+            result = await CatalogueService(self.session, provider, self.llm).discover_for_skill(skill)
         except CatalogueError as exc:
             logger.warning(
                 "inline discovery failed; milestone falls back to self-study",
