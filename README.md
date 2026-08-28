@@ -348,4 +348,32 @@ frontend/
 docs/screenshots/   the images in this README, captured from the running app
 ```
 
+---
 
+## Trust & Consistency Guarantees
+
+These are not incidental behaviours — they are properties the system
+deliberately guarantees, enforced in code and pinned by tests. Where honesty
+and convenience conflicted, each of these chose honesty: say less, show more,
+redo the work.
+
+- **No model, no invented facts — ever.** With `LLM_PROVIDER=mock`, open
+  subject-matter questions ("CNNs vs transformers?") are answered from the
+  catalogue's own stored course descriptions — curated facts, not guesses —
+  and the coach says plainly when that is all it has. A configured model adds
+  fluency, never new authority.
+- **Reviewer grading replays the full pipeline.** Marking a short answer
+  correct doesn't stop at re-scoring: the proficiency the submission blended
+  in is recovered exactly (the update is a linear formula, so it inverts) and
+  re-applied with the reviewed score, and the adaptive engine re-runs its
+  threshold decisions — a milestone earned by the corrected score unlocks
+  then, not never.
+- **Declared prior courses match carefully, then stop.** Beyond id, URL and
+  exact-title matches, a guarded token tier resolves human shorthand ("CS50
+  Python" → the Harvard course) — but only when every identity token appears,
+  exactly one candidate qualifies, and no stated provider disagrees. Anything
+  weaker shows the course again rather than hiding one the learner never took.
+- **Feedback lands where it was given.** A thumbs-down on a specific resource
+  demotes exactly that resource in ranking (your latest signal wins); the
+  per-provider average remains only as the prior for material you have never
+  rated.
