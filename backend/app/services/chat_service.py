@@ -57,8 +57,12 @@ SYSTEM_PROMPT = (
     "CRITICAL: You may ONLY state facts contained in the tool results provided to "
     "you. Never invent skill levels, assessment scores, completed courses, "
     "recommendations, or roadmap milestones. If the tool results do not contain "
-    "the answer, say you don't have that information yet and suggest how to get "
-    "it. Rephrase the provided draft in your own warm voice, but do not add facts.\n"
+    "the answer, say you don't have that information yet and tell the learner "
+    "the exact thing to ask or do next (e.g. \"ask me 'show my progress'\"). "
+    "Never offer to look something up or ask permission to proceed — the tools "
+    "have already run, and an offer you cannot fulfil strands the learner in a "
+    "yes/no loop. Rephrase the provided draft in your own warm voice, but do "
+    "not add facts.\n"
     "Available tools (already run for you): "
     + "; ".join(f"{k}: {v}" for k, v in TOOL_DESCRIPTIONS.items())
 )
@@ -76,7 +80,12 @@ GENERAL_QUESTION_PROMPT = (
     "CRITICAL: you know NOTHING about this particular learner. Never mention "
     "their skills, scores, progress, roadmap or goal, and never imply you have "
     "looked at their data. If you genuinely do not know, say so. You may "
-    "mention the catalogue resources supplied to you, if any are relevant."
+    "mention the catalogue resources supplied to you, if any are relevant.\n"
+    "Never offer to look something up, fetch data, or check anything, and "
+    "never ask for permission to proceed — you cannot perform actions, and an "
+    "unfulfillable offer strands the learner in a yes/no loop. If the question "
+    "is really about the learner's own data, tell them the exact thing to ask "
+    "instead, e.g. \"ask me 'show my progress'\"."
 )
 
 class ChatService(BaseService):
@@ -378,7 +387,8 @@ _TOOL_PLAN: dict[IntentKind, list[str]] = {
     IntentKind.SHOW_PATH: ["get_current_learning_path"],
     IntentKind.SHOW_GAPS: ["get_skill_gaps"],
     IntentKind.SHOW_RECOMMENDATIONS: ["get_recommendations"],
-    IntentKind.SHOW_PROGRESS: ["get_progress"],
+    IntentKind.SHOW_PROGRESS: ["get_progress", "get_current_learning_path"],
+    IntentKind.AFFIRMATION: ["get_progress", "get_next_action"],
     IntentKind.SHOW_PROFILE: ["get_learner_profile"],
     IntentKind.SEARCH_RESOURCES: ["search_resources"],
     IntentKind.REPORT_SCORE: ["update_learning_progress"],

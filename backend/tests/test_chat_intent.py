@@ -172,3 +172,31 @@ def test_open_subject_questions_are_recognised(text: str) -> None:
 def test_recommendation_why_still_routes_to_recommendations() -> None:
     intent = detect_intent("Why are you recommending PyTorch?")
     assert intent.kind is IntentKind.EXPLAIN_RECOMMENDATION
+
+
+def test_asking_about_completed_milestones_is_a_progress_query() -> None:
+    """"What milestones have I completed" asks ABOUT progress; it must not be
+    swallowed by the completion-report pattern ("i completed ...") or fall to
+    the general-question branch, whose model cannot see learner data."""
+    for msg in (
+        "what milestones do I have completed",
+        "which milestones have I achieved?",
+        "what have I finished so far",
+        "how many courses did I complete",
+        "show my milestones",
+    ):
+        assert detect_intent(msg).kind == IntentKind.SHOW_PROGRESS, msg
+
+
+def test_reporting_a_completion_still_reports() -> None:
+    assert detect_intent("I completed the Docker course").kind == IntentKind.REPORT_COMPLETION
+    assert detect_intent("I just finished Learn Python").kind == IntentKind.REPORT_COMPLETION
+
+
+def test_bare_affirmation_gets_standing_not_greeting() -> None:
+    """A "yes" after an offer must answer with something, not loop back to
+    the capabilities greeting."""
+    for msg in ("yes", "Yes you can see", "sure", "go ahead", "ok!", "yes please"):
+        assert detect_intent(msg).kind == IntentKind.AFFIRMATION, msg
+    # A sentence that merely starts with yes is not a bare go-ahead.
+    assert detect_intent("yes I want to become a data analyst").kind == IntentKind.SET_GOAL

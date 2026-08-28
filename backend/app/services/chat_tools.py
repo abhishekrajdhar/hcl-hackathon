@@ -120,16 +120,27 @@ class ChatToolExecutor:
         if roadmap is None:
             return ToolResult("get_current_learning_path", False,
                               "No active learning path. Set a goal to generate one.")
+        def _milestone_done(m) -> bool:  # noqa: ANN001 - roadmap schema object
+            items = [*m.resources, *([m.assessment] if m.assessment else []),
+                     *([m.project] if m.project else [])]
+            done = ("completed", "skipped")
+            return bool(items) and all(
+                getattr(i.status, "value", i.status) in done for i in items
+            )
+
         phases = [
             {"phase": p.title, "is_capstone": p.is_capstone,
-             "milestones": [m.title for m in p.milestones]}
+             "milestones": [m.title for m in p.milestones],
+             "completed_milestones": [m.title for m in p.milestones if _milestone_done(m)]}
             for p in roadmap.phases
         ]
+        completed = [title for p in phases for title in p["completed_milestones"]]
         return ToolResult(
             "get_current_learning_path", True,
             f"Active roadmap '{roadmap.title}' with {len(phases)} phases "
             f"({roadmap.total_estimated_minutes // 60}h total).",
             {"title": roadmap.title, "phases": phases,
+             "completed_milestones": completed,
              "total_hours": roadmap.total_estimated_minutes // 60,
              "feasibility_ok": roadmap.feasibility_ok},
         )

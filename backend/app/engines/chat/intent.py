@@ -28,6 +28,7 @@ class IntentKind(str, Enum):
     SHOW_GAPS = "show_gaps"
     SHOW_RECOMMENDATIONS = "show_recommendations"
     SHOW_PROGRESS = "show_progress"
+    AFFIRMATION = "affirmation"
     SHOW_PROFILE = "show_profile"
     SEARCH_RESOURCES = "search_resources"
     GREETING = "greeting"
@@ -293,9 +294,36 @@ def _clean(text: str | None) -> str | None:
     return cleaned or None
 
 
+_PROGRESS_QUESTION_RE = re.compile(
+    r"^(?:so\s+)?(?:what|which|how\s+many|have\s+i|did\s+i|show|list|tell\s+me)\b"
+    r".*\b(?:milestones?|completed?|finished|achieved?|accomplished|done)\b",
+    re.IGNORECASE,
+)
+
+#: A bare go-ahead. The reply that preceded it is dialogue, not state, so the
+#: useful deterministic answer is the learner's standing plus their next step.
+_AFFIRMATION_RE = re.compile(
+    r"^\s*(?:yes|yeah|yep|yup|sure|ok|okay|please(?:\s+do)?|go\s+ahead|do\s+it|"
+    r"sounds\s+good|absolutely|of\s+course|yes\s+please|"
+    r"yes\s+you\s+can(?:\s+see(?:\s+(?:that|it))?)?)\s*[.!]*\s*$",
+    re.IGNORECASE,
+)
+
+
 def _classify(message: str) -> Intent:
     text = message.strip()
     low = text.lower()
+
+    # 0) a bare "yes"/"go ahead" — answer with standing + next step rather
+    # than looping back to the greeting.
+    if _AFFIRMATION_RE.match(text):
+        return Intent(IntentKind.AFFIRMATION, raw=text, matched=["affirmation"])
+
+    # 0b) asking ABOUT what was completed ("what milestones have I achieved")
+    # is a progress query. It must outrank the completion REPORT below, whose
+    # "\bi\s+completed\b" would otherwise swallow "...have I completed".
+    if _PROGRESS_QUESTION_RE.search(low):
+        return Intent(IntentKind.SHOW_PROGRESS, raw=text, matched=["progress_question"])
 
     # 1) report an assessment score
     m = _SCORE_RE.search(text) or _SCORE_RE2.search(text)
@@ -365,7 +393,8 @@ def _classify(message: str) -> Intent:
         return Intent(IntentKind.SHOW_GAPS, raw=text, matched=["gaps"])
     if any(k in low for k in ("recommend", "what should i study", "what should i learn", "suggest")):
         return Intent(IntentKind.SHOW_RECOMMENDATIONS, raw=text, matched=["recommendations"])
-    if any(k in low for k in ("my progress", "how am i doing", "how far", "progress")):
+    if any(k in low for k in ("my progress", "how am i doing", "how far", "progress",
+                              "milestone", "achievements", "so far")):
         return Intent(IntentKind.SHOW_PROGRESS, raw=text, matched=["progress"])
     if any(k in low for k in ("my profile", "about me", "what do you know about me", "my skills")):
         return Intent(IntentKind.SHOW_PROFILE, raw=text, matched=["profile"])

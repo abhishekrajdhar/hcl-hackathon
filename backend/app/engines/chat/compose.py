@@ -159,7 +159,34 @@ def compose_reply(intent: Intent, results: list[ToolResult]) -> str:
                           x["title"] for x in r.data["recommendations"] if x["title"]) + ".")
 
     if intent.kind == IntentKind.SHOW_PROGRESS:
-        return _relay(tools.get("get_progress"))
+        progress = tools.get("get_progress")
+        path = tools.get("get_current_learning_path")
+        if not (progress and progress.available):
+            return _relay(progress)
+        parts = [progress.summary]
+        if path and path.available:
+            completed = path.data.get("completed_milestones") or []
+            parts.append(
+                "Milestones completed: " + ", ".join(completed) + "."
+                if completed
+                else "No milestone is fully completed yet."
+            )
+        return " ".join(parts)
+
+    if intent.kind == IntentKind.AFFIRMATION:
+        # A go-ahead with nothing actionable attached: show where they stand
+        # and what to do next, which is what every "yes" here is asking for.
+        progress = tools.get("get_progress")
+        nxt = tools.get("get_next_action")
+        parts = []
+        if progress and progress.available:
+            parts.append("Here's where you stand: " + progress.summary)
+        if nxt and nxt.available:
+            summary = nxt.summary.removeprefix("Next: ")
+            parts.append("Next up: " + summary)
+        return " ".join(parts) or (
+            "Tell me what you'd like — your progress, your roadmap, or what to learn next."
+        )
 
     if intent.kind == IntentKind.SHOW_PROFILE:
         return _relay(tools.get("get_learner_profile"),
