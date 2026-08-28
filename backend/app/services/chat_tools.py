@@ -208,7 +208,8 @@ class ChatToolExecutor:
                               f"No resources found for '{query}'.", {"query": query, "results": []})
         results = [
             {"title": s.resource.title, "type": s.resource.resource_type.value,
-             "similarity": s.similarity}
+             "similarity": s.similarity,
+             "description": (s.resource.description or "")[:280]}
             for s in scored
         ]
         return ToolResult("search_resources", True,

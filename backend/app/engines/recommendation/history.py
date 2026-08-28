@@ -10,10 +10,12 @@ different evidence:
   something that may or may not correspond to a catalogue row.
 
 Both end up suppressing a recommendation, but a declared course only matches a
-catalogue resource when the match is unambiguous — a URL or an exact
-title (optionally with the provider agreeing). Fuzzy title matching is
-deliberately NOT done: silently hiding a resource the learner never took is a
-worse failure than showing one they did.
+catalogue resource when the match is unambiguous — an id, a URL, an exact
+normalised title, or (last) a guarded token match. The guards exist because
+silently hiding a resource the learner never took is a worse failure than
+showing one they did: a token match needs at least two meaningful tokens, all
+of them present in the candidate title, exactly ONE candidate may qualify,
+and a stated provider disagreement still vetoes it.
 
 Pure: no DB, no clock, no model.
 """
@@ -53,6 +55,23 @@ def _norm_title(value: str | None) -> str:
     if not value:
         return ""
     return re.sub(r"[^a-z0-9]+", " ", value.lower()).strip()
+
+
+#: Words that carry no identity when comparing course titles — the fuzzy tier
+#: matches on what names the course, not on how it is packaged.
+_TITLE_STOPWORDS = frozenset({
+    "the", "a", "an", "and", "or", "of", "for", "to", "in", "on", "with",
+    "full", "complete", "course", "tutorial", "class", "bootcamp", "guide",
+    "beginner", "beginners", "introduction", "intro", "learn", "learning",
+    "masterclass", "crash", "university", "free", "hours", "hour", "part",
+})
+
+
+def _title_tokens(value: str | None) -> frozenset[str]:
+    return frozenset(
+        tok for tok in _norm_title(value).split()
+        if tok not in _TITLE_STOPWORDS and len(tok) > 1
+    )
 
 
 def _norm_url(value: str | None) -> str:
@@ -104,16 +123,37 @@ def match_declared_courses(
             continue
         # An ambiguous title (two catalogue rows share it) is not a match.
         hits = by_title.get(title, [])
-        if len(hits) != 1:
+        if len(hits) == 1:
+            hit = hits[0]
+            if not _providers_disagree(course, hit):
+                matched.setdefault(hit.resource_id, course.title)
+                continue
+        if hits:
             continue
-        hit = hits[0]
-        declared_provider = _norm_title(course.provider)
-        entry_provider = _norm_title(hit.provider)
-        if declared_provider and entry_provider and declared_provider != entry_provider:
+
+        # Last tier: guarded token containment. "CS50 Python" should find
+        # "Harvard CS50's ... with Python – Full University Course", but only
+        # when the identity tokens all appear, exactly one candidate
+        # qualifies, and no stated provider disagrees. Anything weaker shows
+        # the course again rather than guessing.
+        declared_tokens = _title_tokens(course.title)
+        if len(declared_tokens) < 2:
             continue
-        matched.setdefault(hit.resource_id, course.title)
+        candidates = [
+            entry for entry in entries
+            if declared_tokens <= _title_tokens(entry.title)
+            and not _providers_disagree(course, entry)
+        ]
+        if len(candidates) == 1:
+            matched.setdefault(candidates[0].resource_id, course.title)
 
     return matched
+
+
+def _providers_disagree(course: DeclaredCourse, entry: CatalogueEntry) -> bool:
+    declared = _norm_title(course.provider)
+    known = _norm_title(entry.provider)
+    return bool(declared and known and declared != known)
 
 
 def build_suppressions(

@@ -295,6 +295,7 @@ class AssessmentService(BaseService):
             raise NotFoundError("Assessment result", result_id)
 
         target = str(payload.question_id)
+        old_responses = [dict(r) for r in result.responses]
         responses = [dict(r) for r in result.responses]
         match = next((r for r in responses if r.get("question_id") == target), None)
         if match is None:
@@ -327,7 +328,60 @@ class AssessmentService(BaseService):
             },
         )
         await self.commit()
+
+        # Replay what the original submission triggered, on the corrected
+        # score. The submission blended the old per-skill ratios into the
+        # proficiency vector; recover-and-reapply swaps them for the reviewed
+        # ones (exact, because the blend is linear), and the adaptive engine
+        # then re-runs its threshold decisions — a milestone earned by the
+        # corrected score unlocks now instead of never.
+        await self._replay_review(result, old_responses, responses)
         return updated
+
+    async def _replay_review(
+        self,
+        result: AssessmentResult,
+        old_responses: list[dict],
+        new_responses: list[dict],
+    ) -> None:
+        from app.engines.profile import assessment_skill_scores
+        from app.schemas.adaptive import AdaptiveUpdateRequest
+        from app.services.adaptive_service import AdaptiveLearningService
+        from app.services.profile_service import ProfileService
+
+        assessment = await self.assessments.get(result.assessment_id)
+        fallback = assessment.skill_id if assessment else None
+        old_ratios = {
+            s.skill_id: s.ratio
+            for s in assessment_skill_scores(old_responses, fallback_skill_id=fallback)
+        }
+        new_ratios = {
+            s.skill_id: s.ratio
+            for s in assessment_skill_scores(new_responses, fallback_skill_id=fallback)
+        }
+
+        profiles = ProfileService(self.session)
+        changed = False
+        for skill_id, new_ratio in new_ratios.items():
+            old_ratio = old_ratios.get(skill_id, 0.0)
+            if abs(new_ratio - old_ratio) < 1e-9:
+                continue
+            await profiles.reapply_assessment_ratio(
+                result.user_id, skill_id, old_ratio=old_ratio, new_ratio=new_ratio
+            )
+            changed = True
+        if not changed:
+            return
+        await self.commit()
+
+        # Milestone completion / unlock / remediation on the corrected result.
+        await AdaptiveLearningService(self.session).update(
+            AdaptiveUpdateRequest(
+                user_id=result.user_id, assessment_result_id=result.id
+            ),
+            requesting_user_id=result.user_id,
+            is_admin=True,
+        )
 
     async def list_results(
         self, user_id: uuid.UUID, *, limit: int, offset: int

@@ -41,9 +41,15 @@ export interface GalaxySceneProps {
   onSelect: (id: string | null) => void;
   /** Node ids the AI coach just mentioned — rendered with a pulse. */
   pulseIds: Set<string>;
+  /**
+   * Camera proximity multiplier. 1 (default) frames the whole graph with
+   * headroom — right for the interactive dashboard. The landing hero passes
+   * >1 to sit closer, so the stars read at a glance in a half-width panel.
+   */
+  zoom?: number;
 }
 
-export function GalaxyScene({ model, selectedId, onSelect, pulseIds }: GalaxySceneProps) {
+export function GalaxyScene({ model, selectedId, onSelect, pulseIds, zoom = 1 }: GalaxySceneProps) {
   const layout = useMemo(() => layoutGalaxy(model), [model]);
 
   const focus = useMemo(() => {
@@ -58,7 +64,7 @@ export function GalaxyScene({ model, selectedId, onSelect, pulseIds }: GalaxySce
     !focus || id === selectedId || focus.ancestors.has(id) || focus.descendants.has(id);
 
   const mid = layout.height / 2;
-  const cameraDistance = Math.max(11, layout.spread * 2.4 + layout.height * 0.5);
+  const cameraDistance = Math.max(11, layout.spread * 2.4 + layout.height * 0.5) / zoom;
 
   if (!layout.nodes.length) {
     return (

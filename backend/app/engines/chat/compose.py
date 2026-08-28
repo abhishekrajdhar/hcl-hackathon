@@ -67,12 +67,18 @@ def compose_reply(intent: Intent, results: list[ToolResult]) -> str:
         # the fallback for the mock provider: point at the catalogue rather
         # than pretend to know.
         search = tools.get("search_resources")
-        if search and search.available and search.data.get("resources"):
-            titles = ", ".join(r["title"] for r in search.data["resources"][:3])
-            return (
-                "That's a general question rather than one about your path, and I don't "
-                f"have a model configured to answer it. The closest material I have is: {titles}."
-            )
+        results = (search.data.get("results") or []) if search and search.available else []
+        if results:
+            top = results[0]
+            description = (top.get("description") or "").strip()
+            parts = []
+            if description:
+                # The catalogue's own stored summary — a curated fact about
+                # the subject, not a guess.
+                parts.append(f"From the catalogue, \"{top['title']}\": {description}")
+            titles = ", ".join(r["title"] for r in results[:3])
+            parts.append(f"Material that covers this: {titles}.")
+            return " ".join(parts)
         return (
             "That's a general question rather than one about your path, and I don't have a "
             "model configured to answer it. I can explain how skills depend on each other "

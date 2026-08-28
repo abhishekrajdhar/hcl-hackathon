@@ -20,7 +20,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import ConflictError, NotFoundError
-from app.engines.adaptive import update_from_assessment
+from app.engines.adaptive import recover_previous, update_from_assessment
 from app.engines.profile import (
     ProfileSnapshot,
     assessment_skill_scores,
@@ -412,6 +412,57 @@ class ProfileService(BaseService):
         await self.commit()
         return ProficiencyUpdateReport(
             user_id=user_id, source=f"assessment:{result.assessment_id}", changes=changes
+        )
+
+    async def reapply_assessment_ratio(
+        self,
+        user_id: uuid.UUID,
+        skill_id: uuid.UUID,
+        *,
+        old_ratio: float,
+        new_ratio: float,
+    ) -> ProficiencyChange | None:
+        """Replace an already-applied assessment update after a reviewer
+        re-scores the attempt.
+
+        The submission blended `old_ratio` into the proficiency; the reviewer
+        has now changed the score for this skill. Because the blend is a fixed
+        linear formula, the pre-submission value is recoverable exactly —
+        recover it with the OLD ratio, re-apply with the NEW one. Reviewing
+        the same answer twice cannot double-apply: the recovery always inverts
+        exactly one application.
+        """
+        skill = await self.skills.get(skill_id)
+        if skill is None:
+            return None
+        entry = await self.user_skills.get_for_user(user_id, skill_id)
+        if entry is None:
+            # Submission never wrote this skill (deleted at the time?);
+            # apply the reviewed score as a fresh observation.
+            new_proficiency = update_from_assessment(0.0, new_ratio)
+            await self._write_proficiency(
+                user_id, skill,
+                proficiency=new_proficiency,
+                confidence=_NEW_SKILL_CONFIDENCE,
+                evidence_source=EvidenceSource.ASSESSMENT,
+                last_practiced_at=datetime.now(timezone.utc),
+            )
+            previous = 0.0
+        else:
+            previous = recover_previous(entry.proficiency, old_ratio)
+            new_proficiency = update_from_assessment(previous, new_ratio)
+            entry.proficiency = new_proficiency
+            entry.current_level = proficiency_to_level(new_proficiency, skill.level_scale)
+            entry.evidence_source = EvidenceSource.ASSESSMENT
+            await self.session.flush()
+        return ProficiencyChange(
+            skill_id=skill_id,
+            previous_proficiency=round(previous, 6),
+            new_proficiency=new_proficiency,
+            delta=round(new_proficiency - previous, 6),
+            observed=new_ratio,
+            evidence_source=EvidenceSource.ASSESSMENT,
+            created=entry is None,
         )
 
     # --- draft ingestion (the LLM abstraction) ---------------------------

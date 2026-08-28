@@ -203,3 +203,69 @@ async def test_results_endpoint(api: AsyncClient) -> None:
 async def test_generate_requires_auth(api: AsyncClient) -> None:
     r = await api.post("/assessments/generate", json={"skill_slug": "python"})
     assert r.status_code == 401
+
+
+# --- reviewer grading replays the adaptive update ---------------------------
+async def test_review_replays_proficiency_update(api: AsyncClient) -> None:
+    """Marking a short answer correct must not stop at re-scoring the attempt:
+    the proficiency the submission blended in from the zero score is recovered
+    (the blend is linear, so exactly) and re-applied with the reviewed score.
+    """
+    _, admin_email = await _user(UserRole.ADMIN)
+    learner_id, learner_email = await _user()
+    admin = await _auth(api, admin_email)
+    learner = await _auth(api, learner_email)
+
+    async with SessionLocal() as s:
+        skill_id = str(await s.scalar(text("SELECT id FROM skills WHERE slug = 'statistics'")))
+
+    created = await api.post(
+        "/assessments", headers=admin,
+        json={
+            "skill_id": skill_id,
+            "title": f"Review replay {uuid.uuid4().hex[:6]}",
+            "passing_score": 0.7,
+            "questions": [{
+                "skill_id": skill_id,
+                "order_index": 0,
+                "question_type": "short_answer",
+                "stem": "Explain the central limit theorem.",
+                "points": 10,
+                "correct_answer": {},
+            }],
+        },
+    )
+    assert created.status_code == 201, created.text
+    aid = created.json()["id"]
+    qid = (await api.get(f"/assessments/{aid}/questions", headers=admin)).json()[0]["id"]
+
+    submitted = await api.post(
+        f"/assessments/{aid}/submit", headers=learner,
+        json={"answers": [{"question_id": qid, "response": "samples tend to normality"}]},
+    )
+    assert submitted.status_code in (200, 201), submitted.text
+    result_id = submitted.json()["result"]["id"] if "result" in submitted.json() else submitted.json()["id"]
+
+    async with SessionLocal() as s:
+        before = await s.scalar(text(
+            "SELECT proficiency FROM user_skills WHERE user_id = :u AND skill_id = :s"
+        ), {"u": str(learner_id), "s": skill_id})
+
+    reviewed = await api.post(
+        f"/assessment-reviews/{result_id}", headers=admin,
+        json={"question_id": qid, "is_correct": True},
+    )
+    assert reviewed.status_code == 200, reviewed.text
+    assert reviewed.json()["percentage"] == 100.0
+
+    async with SessionLocal() as s:
+        after = await s.scalar(text(
+            "SELECT proficiency FROM user_skills WHERE user_id = :u AND skill_id = :s"
+        ), {"u": str(learner_id), "s": skill_id})
+
+    # Submission applied ratio 0 (short answer unscored): new = 0.6*old.
+    # The review recovers old and re-applies ratio 1: new = 0.6*old + 0.4.
+    assert after is not None
+    expected = round(0.6 * ((before or 0.0) - 0.4 * 0.0) / 0.6 + 0.4, 4) if before is not None else 0.4
+    assert abs(after - expected) < 1e-3, f"before={before} after={after} expected≈{expected}"
+    assert after > (before or 0.0), "the reviewed pass must raise proficiency"

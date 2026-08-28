@@ -56,7 +56,7 @@ export function HeroWorld() {
   return (
     <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
       {model && (
-        <GalaxyScene model={model} selectedId={null} onSelect={noop} pulseIds={NOTHING} />
+        <GalaxyScene model={model} selectedId={null} onSelect={noop} pulseIds={NOTHING} zoom={2.0} />
       )}
 
       {/* Feather the panel's edges so the world dissolves into the page

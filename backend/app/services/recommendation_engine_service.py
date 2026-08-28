@@ -145,12 +145,12 @@ class RecommendationEngineService(BaseService):
         )
 
         candidates = await self._retrieve_candidates(request, computed, gaps)
-        provider_success = await self._provider_success(learner_id)
+        resource_success, provider_success = await self._feedback_success(learner_id)
 
         scored = [
             RankedCandidate(
                 scored=score_resource(
-                    self._to_candidate(resource, similarity, provider_success),
+                    self._to_candidate(resource, similarity, resource_success, provider_success),
                     learner,
                     weights=self.weights,
                 ),
@@ -287,7 +287,10 @@ class RecommendationEngineService(BaseService):
     # --- candidate assembly ----------------------------------------------
     @staticmethod
     def _to_candidate(
-        resource: Resource, similarity: float, provider_success: dict[str, float]
+        resource: Resource,
+        similarity: float,
+        resource_success: dict[uuid.UUID, float],
+        provider_success: dict[str, float],
     ) -> CandidateResource:
         taught = tuple(
             TaughtSkill(
@@ -312,7 +315,10 @@ class RecommendationEngineService(BaseService):
             quality_score=resource.quality_score,
             rating=resource.rating,
             estimated_hours=resource.estimated_hours,
-            historical_success=provider_success.get(resource.provider),
+            # This exact resource's signal outranks the provider prior.
+            historical_success=resource_success.get(
+                resource.id, provider_success.get(resource.provider)
+            ),
         )
 
     async def _already_learned(
@@ -349,11 +355,16 @@ class RecommendationEngineService(BaseService):
         matches = match_declared_courses(declared, catalogue) if declared else {}
         return build_suppressions(completed, matches)
 
-    async def _provider_success(self, user_id: uuid.UUID) -> dict[str, float]:
-        """Per-provider success prior from the learner's own resource feedback.
+    async def _feedback_success(
+        self, user_id: uuid.UUID
+    ) -> tuple[dict[uuid.UUID, float], dict[str, float]]:
+        """The learner's own feedback, at two resolutions.
 
-        Empty when there is no history — the engine then uses its neutral prior.
-        This is the "historical performance if available" signal.
+        Per-RESOURCE first: a thumbs-down on this exact video is the strongest
+        historical signal there is and should demote exactly it. The
+        per-provider average remains as the prior for everything else the
+        learner has never rated. Empty maps when there is no history — the
+        engine then uses its neutral prior.
         """
         rows = await self.feedback.list(
             limit=500,
@@ -361,16 +372,23 @@ class RecommendationEngineService(BaseService):
                 Feedback.user_id == user_id,
                 Feedback.target_type == FeedbackTargetType.RESOURCE,
             ],
+            order_by=(Feedback.created_at,),
         )
         if not rows:
-            return {}
+            return {}, {}
         resources = {r.id: r for r in await self.resources.get_many([r.target_id for r in rows])}
+        by_resource: dict[uuid.UUID, float] = {}
         by_provider: dict[str, list[float]] = {}
         for row in rows:
             resource = resources.get(row.target_id)
-            if resource is not None and row.signal in _FEEDBACK_VALUE:
-                by_provider.setdefault(resource.provider, []).append(_FEEDBACK_VALUE[row.signal])
-        return {p: sum(v) / len(v) for p, v in by_provider.items() if v}
+            if resource is None or row.signal not in _FEEDBACK_VALUE:
+                continue
+            value = _FEEDBACK_VALUE[row.signal]
+            # Rows arrive oldest-first, so the learner's LATEST signal on a
+            # resource wins — changing your mind must actually change it.
+            by_resource[resource.id] = value
+            by_provider.setdefault(resource.provider, []).append(value)
+        return by_resource, {p: sum(v) / len(v) for p, v in by_provider.items() if v}
 
     # --- response mapping ------------------------------------------------
     def _to_item(self, rc: RankedCandidate, *, rank: int) -> RecommendationItem:
